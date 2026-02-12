@@ -100,6 +100,11 @@ This boilerplate is built on patterns from 6 shipped games:
 - **PIXEL_RATIO cap at 2:** Prevents GPU meltdown on iPhone Pro (3x) devices
 - **Frozen CONFIG:** All constants inspectable at a glance, never modified at runtime
 
+## Support me!
+
+If like this and you want to support my efforts, consider purchasing one of my games in the [Apple App Store](https://apps.apple.com/us/developer/marco-van-hylckama-vlieg/id1869986586).
+
+
 ## License
 
 MIT
