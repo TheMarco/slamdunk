@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Game Starter Kit</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .container {
+      text-align: center;
+      max-width: 600px;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      color: #00ff88;
+      text-shadow: 0 0 20px rgba(0, 255, 136, 0.4);
+      margin-bottom: 16px;
+      letter-spacing: 4px;
+    }
+    p {
+      font-size: 1rem;
+      color: #888;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+    .play-btn {
+      display: inline-block;
+      padding: 16px 48px;
+      background: transparent;
+      border: 2px solid #00ff88;
+      color: #00ff88;
+      font-family: 'Courier New', monospace;
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .play-btn:hover {
+      background: rgba(0, 255, 136, 0.15);
+      box-shadow: 0 0 30px rgba(0, 255, 136, 0.3);
+    }
+    .footer {
+      margin-top: 48px;
+      font-size: 0.8rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>GAME STARTER KIT</h1>
+    <p>Action/Arcade Game Boilerplate<br>Phaser 3 + Vite + Capacitor</p>
+    <a href="game.html" class="play-btn">PLAY</a>
+    <div class="footer">
+      Run <code>/new-game</code> in Claude Code to reshape this into your game
+    </div>
+  </div>
+</body>
+</html>

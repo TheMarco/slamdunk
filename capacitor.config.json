@@ -1,0 +1,17 @@
+{
+  "appId": "com.example.gameboilerplate",
+  "appName": "Game Boilerplate",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    },
+    "StatusBar": {
+      "style": "Dark",
+      "backgroundColor": "#000000"
+    }
+  }
+}

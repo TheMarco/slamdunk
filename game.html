@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Game Starter Kit</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    ::-webkit-scrollbar { display: none; }
+
+    /* === Desktop layout === */
+    #game-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      max-width: 100vw;
+    }
+    #game-container canvas {
+      display: block;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-crisp-edges;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    /* === Mobile touch layout === */
+    #mobile-wrapper {
+      display: none;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #mobile-game-area {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    #mobile-game-area canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+    }
+    #touch-controls {
+      display: flex;
+      height: 140px;
+      background: #111;
+      border-top: 1px solid #333;
+    }
+    .touch-zone {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+      transition: background 0.08s ease-out;
+      border-right: 1px solid #222;
+      color: #555;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+    }
+    .touch-zone:last-child { border-right: none; }
+    .touch-zone.flash {
+      background: radial-gradient(circle, rgba(0, 255, 136, 0.3) 0%, transparent 70%);
+    }
+    /* D-pad area (left side) */
+    #touch-dpad {
+      flex: 2;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+    }
+    #touch-dpad .touch-zone {
+      border-right: 1px solid #222;
+      border-bottom: 1px solid #222;
+    }
+    /* Action buttons (right side) */
+    #touch-actions {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    #touch-actions .touch-zone {
+      flex: 1;
+      border-bottom: 1px solid #222;
+    }
+
+    body.mobile-mode {
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <!-- Mobile touch layout (hidden on desktop) -->
+  <div id="mobile-wrapper">
+    <div id="mobile-game-area"></div>
+    <div id="touch-controls">
+      <div id="touch-dpad">
+        <div class="touch-zone" data-key=""></div>
+        <div class="touch-zone" data-key="ArrowUp">UP</div>
+        <div class="touch-zone" data-key=""></div>
+        <div class="touch-zone" data-key="ArrowLeft">LEFT</div>
+        <div class="touch-zone" data-key="ArrowDown">DOWN</div>
+        <div class="touch-zone" data-key="ArrowRight">RIGHT</div>
+      </div>
+      <div id="touch-actions">
+        <div class="touch-zone" data-key="Space" id="touch-fire">FIRE</div>
+        <div class="touch-zone" data-key="Escape" id="touch-pause">PAUSE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desktop layout -->
+  <div id="game-container"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
