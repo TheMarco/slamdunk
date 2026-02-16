@@ -7,19 +7,19 @@ export class SplashScene extends Phaser.Scene {
   }
 
   create() {
-    this.cameras.main.setBackgroundColor(CONFIG.COLORS.BG);
+    this.cameras.main.setBackgroundColor(CONFIG.BG);
 
     const cx = CONFIG.CENTER_X;
     const cy = CONFIG.CENTER_Y;
 
-    this.add.text(cx, cy - 20, 'GAME STARTER KIT', {
+    this.add.text(cx, cy - 20, 'VECTOR DRIFT', {
       fontFamily: 'Courier New',
       fontSize: '28px',
-      color: '#00ff88',
+      color: '#00ffff',
       align: 'center',
     }).setOrigin(0.5);
 
-    this.add.text(cx, cy + 20, 'Action/Arcade Boilerplate', {
+    this.add.text(cx, cy + 20, 'Kinetic Survival', {
       fontFamily: 'Courier New',
       fontSize: '14px',
       color: '#555555',

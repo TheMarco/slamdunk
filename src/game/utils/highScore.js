@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'game_boilerplate_highscore';
+const STORAGE_KEY = 'vector_drift_highscore';
 
 export function getHighScore() {
   try {

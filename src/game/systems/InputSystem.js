@@ -1,45 +1,57 @@
-const MAX_FIRE_QUEUE = 4;
-
 export class InputSystem {
   constructor(scene) {
-    this.scene = scene;
-    this._held = {};
-    this._fireQueue = 0;
+    this._holding = false;
+    this._horizontal = 0;
+    this._justPressed = false;
+    this._justReleased = false;
 
-    // Track held keys (works with both real keyboard and synthetic mobile events)
-    const onDown = (e) => {
-      this._held[e.code] = true;
-      if (e.code === 'Space') {
-        this._fireQueue = Math.min(this._fireQueue + 1, MAX_FIRE_QUEUE);
+    this._onKeyDown = (e) => {
+      if (e.code === 'Space' || e.code === 'KeyW' || e.code === 'ArrowUp') {
+        if (!this._holding) this._justPressed = true;
+        this._holding = true;
+        e.preventDefault();
       }
-    };
-    const onUp = (e) => {
-      this._held[e.code] = false;
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') this._leftHeld = true;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') this._rightHeld = true;
     };
 
-    window.addEventListener('keydown', onDown);
-    window.addEventListener('keyup', onUp);
+    this._onKeyUp = (e) => {
+      if (e.code === 'Space' || e.code === 'KeyW' || e.code === 'ArrowUp') {
+        if (this._holding) this._justReleased = true;
+        this._holding = false;
+      }
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') this._leftHeld = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') this._rightHeld = false;
+    };
 
-    // Clean up on scene shutdown
+    this._leftHeld = false;
+    this._rightHeld = false;
+
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
+
+    // Cleanup on scene shutdown
     scene.events.on('shutdown', () => {
-      window.removeEventListener('keydown', onDown);
-      window.removeEventListener('keyup', onUp);
-      this._held = {};
+      window.removeEventListener('keydown', this._onKeyDown);
+      window.removeEventListener('keyup', this._onKeyUp);
     });
   }
 
-  update(delta) {
-    const left = this._held['ArrowLeft'] || this._held['KeyA'] || false;
-    const right = this._held['ArrowRight'] || this._held['KeyD'] || false;
-    const up = this._held['ArrowUp'] || this._held['KeyW'] || false;
-    const down = this._held['ArrowDown'] || this._held['KeyS'] || false;
+  update() {
+    const result = {
+      holding: this._holding,
+      horizontal: 0,
+      justPressed: this._justPressed,
+      justReleased: this._justReleased,
+    };
 
-    let fire = false;
-    if (this._fireQueue > 0 || this._held['Space']) {
-      fire = true;
-      if (this._fireQueue > 0) this._fireQueue--;
-    }
+    if (this._leftHeld) result.horizontal -= 1;
+    if (this._rightHeld) result.horizontal += 1;
 
-    return { left, right, up, down, fire };
+    // Clear one-shot flags
+    this._justPressed = false;
+    this._justReleased = false;
+
+    return result;
   }
 }

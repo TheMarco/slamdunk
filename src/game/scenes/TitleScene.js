@@ -8,18 +8,18 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create() {
-    this.cameras.main.setBackgroundColor(CONFIG.COLORS.BG);
+    this.cameras.main.setBackgroundColor(CONFIG.BG);
     const cx = CONFIG.CENTER_X;
     const cy = CONFIG.CENTER_Y;
 
-    this.add.text(cx, cy - 80, 'ARENA SHOOTER', {
+    this.add.text(cx, cy - 80, 'VECTOR DRIFT', {
       fontFamily: 'Courier New',
       fontSize: '36px',
-      color: '#00ff88',
+      color: '#00ffff',
       align: 'center',
     }).setOrigin(0.5);
 
-    this.add.text(cx, cy - 40, 'Demo Game — Top-Down Action', {
+    this.add.text(cx, cy - 40, 'Hold to Fly — Release to Slam', {
       fontFamily: 'Courier New',
       fontSize: '14px',
       color: '#555555',
@@ -41,7 +41,7 @@ export class TitleScene extends Phaser.Scene {
     this.prompt = this.add.text(cx, cy + 60, 'PRESS SPACE / TAP TO START', {
       fontFamily: 'Courier New',
       fontSize: '16px',
-      color: '#00ff88',
+      color: '#00ffff',
       align: 'center',
     }).setOrigin(0.5);
 
@@ -49,9 +49,9 @@ export class TitleScene extends Phaser.Scene {
     this.promptDir = -1;
 
     // Controls info
-    this.add.text(cx, cy + 120, 'WASD / ARROWS = Move    SPACE = Shoot', {
+    this.add.text(cx, cy + 120, 'HOLD SPACE = FLY | RELEASE = SLAM | ARROWS = MOVE', {
       fontFamily: 'Courier New',
-      fontSize: '12px',
+      fontSize: '11px',
       color: '#444444',
       align: 'center',
     }).setOrigin(0.5);

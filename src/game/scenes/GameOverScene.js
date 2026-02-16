@@ -9,30 +9,49 @@ export class GameOverScene extends Phaser.Scene {
 
   init(data) {
     this.finalScore = data.score || 0;
-    this.newHighScore = data.newHighScore || false;
+    this.kills = data.kills || 0;
+    this.slamCount = data.slamCount || 0;
+    this.bestCombo = data.bestCombo || 0;
+    this.phaseReached = data.phaseReached || 'WARMUP';
+    this.isHighScore = data.isHighScore || false;
   }
 
   create() {
-    this.cameras.main.setBackgroundColor(CONFIG.COLORS.BG);
+    this.cameras.main.setBackgroundColor(CONFIG.BG);
     const cx = CONFIG.CENTER_X;
     const cy = CONFIG.CENTER_Y;
 
-    this.add.text(cx, cy - 80, 'GAME OVER', {
+    this.add.text(cx, cy - 120, 'GAME OVER', {
       fontFamily: 'Courier New',
       fontSize: '40px',
       color: '#ff4444',
       align: 'center',
     }).setOrigin(0.5);
 
-    this.add.text(cx, cy - 20, `SCORE: ${this.finalScore}`, {
+    this.add.text(cx, cy - 60, `SCORE: ${this.finalScore}`, {
       fontFamily: 'Courier New',
       fontSize: '24px',
       color: '#ffffff',
       align: 'center',
     }).setOrigin(0.5);
 
-    if (this.newHighScore) {
-      this.add.text(cx, cy + 20, 'NEW HIGH SCORE!', {
+    this.add.text(cx, cy - 20, `KILLS: ${this.kills}  |  SLAMS: ${this.slamCount}`, {
+      fontFamily: 'Courier New',
+      fontSize: '14px',
+      color: '#888888',
+      align: 'center',
+    }).setOrigin(0.5);
+
+    // Best combo + phase reached
+    this.add.text(cx, cy + 5, `BEST COMBO: ${this.bestCombo}  |  PHASE: ${this.phaseReached}`, {
+      fontFamily: 'Courier New',
+      fontSize: '12px',
+      color: '#666666',
+      align: 'center',
+    }).setOrigin(0.5);
+
+    if (this.isHighScore) {
+      this.add.text(cx, cy + 35, 'NEW HIGH SCORE!', {
         fontFamily: 'Courier New',
         fontSize: '18px',
         color: '#ffdd44',
@@ -40,7 +59,7 @@ export class GameOverScene extends Phaser.Scene {
       }).setOrigin(0.5);
     } else {
       const hi = getHighScore();
-      this.add.text(cx, cy + 20, `HIGH SCORE: ${hi}`, {
+      this.add.text(cx, cy + 35, `HIGH SCORE: ${hi}`, {
         fontFamily: 'Courier New',
         fontSize: '16px',
         color: '#888888',
@@ -52,7 +71,7 @@ export class GameOverScene extends Phaser.Scene {
     this.prompt = this.add.text(cx, cy + 80, 'PRESS SPACE TO RESTART', {
       fontFamily: 'Courier New',
       fontSize: '16px',
-      color: '#00ff88',
+      color: '#00ffff',
       align: 'center',
     }).setOrigin(0.5);
     this.promptAlpha = 1;

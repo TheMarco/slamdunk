@@ -1,134 +1,102 @@
 import { CONFIG } from '../config.js';
-import { Enemy } from '../entities/Enemy.js';
-import { FastEnemy } from '../entities/FastEnemy.js';
-import { TankEnemy } from '../entities/TankEnemy.js';
-import { PowerUp } from '../entities/PowerUp.js';
+import { DataBlocker } from '../entities/DataBlocker.js';
+import { ChaserBot } from '../entities/ChaserBot.js';
+import { GravityFlare } from '../entities/GravityFlare.js';
+import { ShieldDrone } from '../entities/ShieldDrone.js';
+import { LaserGate } from '../entities/LaserGate.js';
 import { getDifficulty } from '../config/difficulty.js';
-import { randomBetween } from '../utils/math.js';
-
-// Spawn weights (relative)
-const BASE_WEIGHTS = {
-  enemy: 50,
-  fast_enemy: 25,
-  tank_enemy: 15,
-  powerup: 10,
-};
-
-// Entity unlock times (seconds elapsed)
-const UNLOCK_TIMES = {
-  enemy: 0,
-  fast_enemy: 15,
-  tank_enemy: 30,
-  powerup: 10,
-};
-
-// Density caps (max concurrent)
-const DENSITY_CAPS = {
-  enemy: 20,
-  fast_enemy: 10,
-  tank_enemy: 5,
-  powerup: 3,
-};
+import { randomBetween, randomInt } from '../utils/math.js';
 
 export class SpawnSystem {
-  constructor(entityManager, state) {
-    this.entityManager = entityManager;
-    this.state = state;
+  constructor(entityManager, gameState) {
+    this.em = entityManager;
+    this.state = gameState;
     this._spawnTimer = 0;
   }
 
-  update(delta, player) {
-    const elapsed = this.state.getElapsedSeconds();
-    const diff = getDifficulty(elapsed);
+  update(dt, cameraTop) {
+    const diff = getDifficulty(this.state.elapsed);
+    this._spawnTimer += dt * 1000;
 
-    this._spawnTimer += delta;
     if (this._spawnTimer < diff.spawnInterval) return;
-    this._spawnTimer -= diff.spawnInterval;
+    this._spawnTimer = 0;
 
-    // Pick what to spawn
-    const unlocked = this._getUnlockedTypes(elapsed);
-    const type = this._pickType(unlocked, diff);
-    this._spawn(type, player, diff);
+    const counts = this.em.getCounts();
+    const unlocked = this._getUnlocked(this.state.elapsed);
+    const type = this._pickType(unlocked, counts);
+
+    if (!type) return;
+
+    const spawnX = randomBetween(CONFIG.ARENA_LEFT + 20, CONFIG.ARENA_RIGHT - 20);
+
+    switch (type) {
+      case 'blocker': {
+        // Spawn in flight zone (visible area above ground)
+        const bY = randomBetween(80, CONFIG.GROUND_Y - 100);
+        const blocker = new DataBlocker(spawnX, bY);
+        this.em.addBlocker(blocker);
+
+        // Co-spawn shield drones after 60s
+        if (this.state.elapsed >= 60 && counts.shieldDrones < 6) {
+          const droneCount = 1 + (Math.random() > 0.5 ? 1 : 0);
+          for (let i = 0; i < droneCount; i++) {
+            if (counts.shieldDrones + i < 6) {
+              const drone = new ShieldDrone(blocker.x, blocker.y, blocker);
+              drone.orbitAngle = (Math.PI * 2 / droneCount) * i;
+              this.em.addShieldDrone(drone);
+            }
+          }
+        }
+        break;
+      }
+      case 'chaser': {
+        // Chasers spawn at ground level, from screen edges
+        const edge = Math.random() > 0.5 ? CONFIG.ARENA_LEFT - 20 : CONFIG.ARENA_RIGHT + 20;
+        this.em.addChaser(new ChaserBot(edge, CONFIG.GROUND_Y));
+        break;
+      }
+      case 'flare': {
+        // Spawn in flight zone
+        const fY = randomBetween(100, CONFIG.GROUND_Y - 80);
+        this.em.addFlare(new GravityFlare(spawnX, fY));
+        break;
+      }
+      case 'laserGate': {
+        const lgY = randomBetween(120, 380);
+        const x1 = randomBetween(CONFIG.ARENA_LEFT + 30, CONFIG.CENTER_X - 30);
+        const separation = randomBetween(120, 280);
+        const x2 = Math.min(x1 + separation, CONFIG.ARENA_RIGHT - 30);
+        this.em.addLaserGate(new LaserGate(x1, lgY, x2));
+        break;
+      }
+    }
   }
 
-  _getUnlockedTypes(elapsed) {
-    const types = [];
-    for (const [type, time] of Object.entries(UNLOCK_TIMES)) {
-      if (elapsed >= time) types.push(type);
-    }
+  _getUnlocked(elapsed) {
+    const types = ['blocker'];
+    if (elapsed >= 15) types.push('chaser');
+    if (elapsed >= 30) types.push('flare');
+    if (elapsed >= 45) types.push('laserGate');
     return types;
   }
 
-  _getCount(type) {
-    return this.entityManager.enemies.filter(e => e.alive && e.type === type).length +
-           this.entityManager.powerups.filter(p => p.alive && p.type === type).length;
-  }
+  _pickType(unlocked, counts) {
+    const WEIGHTS = { blocker: 50, chaser: 30, flare: 20, laserGate: 15 };
+    const CAPS = { blocker: 8, chaser: 6, flare: 4, laserGate: 3 };
+    const COUNT_KEYS = { blocker: 'blockers', chaser: 'chasers', flare: 'flares', laserGate: 'laserGates' };
 
-  _pickType(unlocked, diff) {
+    // Filter by density cap
+    const available = unlocked.filter(t => (counts[COUNT_KEYS[t]] || 0) < CAPS[t]);
+    if (available.length === 0) return null;
+
+    // Weighted random
     let total = 0;
-    const pool = [];
-    for (const type of unlocked) {
-      // Density cap
-      if (this._getCount(type) >= (DENSITY_CAPS[type] || 999)) continue;
-      const w = BASE_WEIGHTS[type] || 10;
-      pool.push({ type, weight: w });
-      total += w;
-    }
-    if (pool.length === 0) return 'enemy';
-
+    for (const t of available) total += WEIGHTS[t];
     let roll = Math.random() * total;
-    for (const entry of pool) {
-      roll -= entry.weight;
-      if (roll <= 0) return entry.type;
+    for (const t of available) {
+      roll -= WEIGHTS[t];
+      if (roll <= 0) return t;
     }
-    return pool[pool.length - 1].type;
-  }
-
-  _spawn(type, player, diff) {
-    const pos = this._getSpawnPosition();
-
-    switch (type) {
-      case 'enemy': {
-        const e = new Enemy(pos.x, pos.y);
-        e.speed = CONFIG.ENEMY_SPEED * diff.speedMultiplier;
-        this.entityManager.addEnemy(e);
-        break;
-      }
-      case 'fast_enemy': {
-        const e = new FastEnemy(pos.x, pos.y);
-        e.speed = CONFIG.FAST_ENEMY_SPEED * diff.speedMultiplier;
-        this.entityManager.addEnemy(e);
-        break;
-      }
-      case 'tank_enemy': {
-        const e = new TankEnemy(pos.x, pos.y);
-        e.speed = CONFIG.TANK_ENEMY_SPEED * diff.speedMultiplier;
-        this.entityManager.addEnemy(e);
-        break;
-      }
-      case 'powerup': {
-        const subtype = Math.random() < 0.6 ? 'health' : 'score';
-        const p = new PowerUp(pos.x, pos.y, subtype);
-        this.entityManager.addPowerUp(p);
-        break;
-      }
-    }
-  }
-
-  _getSpawnPosition() {
-    const margin = CONFIG.ARENA_MARGIN;
-    const side = Math.floor(Math.random() * 4);
-
-    switch (side) {
-      case 0: // top
-        return { x: randomBetween(margin, CONFIG.WIDTH - margin), y: -margin };
-      case 1: // right
-        return { x: CONFIG.WIDTH + margin, y: randomBetween(margin, CONFIG.HEIGHT - margin) };
-      case 2: // bottom
-        return { x: randomBetween(margin, CONFIG.WIDTH - margin), y: CONFIG.HEIGHT + margin };
-      case 3: // left
-        return { x: -margin, y: randomBetween(margin, CONFIG.HEIGHT - margin) };
-    }
-    return { x: 0, y: 0 };
+    return available[available.length - 1];
   }
 }

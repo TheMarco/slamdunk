@@ -7,11 +7,17 @@ export class Entity {
     this.type = type;
     this.alive = true;
     this.radius = 10;
+    this.hitFlashTimer = 0;
   }
 
   update(dt) {
     this.prevX = this.x;
     this.prevY = this.y;
+    if (this.hitFlashTimer > 0) this.hitFlashTimer -= dt * 1000;
+  }
+
+  triggerHitFlash() {
+    this.hitFlashTimer = 120;
   }
 
   kill() {

@@ -11,7 +11,7 @@ export function StartGame(containerId) {
     width: CONFIG.WIDTH,
     height: CONFIG.HEIGHT,
     parent: containerId,
-    backgroundColor: CONFIG.COLORS.BG,
+    backgroundColor: CONFIG.BG,
     scene: [SplashScene, TitleScene, GameScene, GameOverScene],
     physics: { default: 'arcade', arcade: { debug: false } },
     scale: {

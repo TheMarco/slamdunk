@@ -1,13 +1,15 @@
-# Game Starter Kit — CLAUDE.md
+# Vector Drift — CLAUDE.md
 
-> This file turns Claude Code into an expert action/arcade game dev partner.
+> This file turns Claude Code into an expert Vector Drift game dev partner.
 > Read this entire file before making any changes to the project.
 
 ## 1. Project Overview
 
-**What this is:** An action/arcade game boilerplate built on Phaser 3 + Vite + Capacitor. Ships as a playable top-down arena shooter demo, designed to be reshaped into any action/arcade game via the `/new-game` skill.
+**What this is:** Vector Drift — a kinetic survival (bullet heaven) game built on Phaser 3 + Vite + Capacitor. Players toggle between Flight Mode (hold = float upward, intangible, auto-fire energy bursts) and Impact Mode (release = plummet, slam enemies with AOE, slide on ground, collect XP orbs). All Graphics API rendering with neon voxel aesthetic on synthwave grid.
 
-**Scope:** Top-down shooters, side-scrollers, space shooters, bullet hell, platformers, tower defense, beat-em-ups, racing — the full action/arcade spectrum. NOT puzzle, card, or narrative games.
+**Core mechanic:** Hold Space = fly upward (intangible, drains flight meter, auto-fires downward). Release = fall and slam ground (AOE damage, slides, recharges flight meter, magnetizes XP orbs). Arrow keys = horizontal movement.
+
+**Scope:** Kinetic survival / bullet heaven with dual-state player, three enemy types, XP orb collection, and difficulty ramp.
 
 **Tech stack:**
 - **Engine:** Phaser 3 (WebGL)
@@ -52,17 +54,17 @@ src/
     │   └── GameState.js         # score, health, gameOver, elapsed, multiplier
     ├── entities/
     │   ├── Entity.js            # Base: x, y, type, alive, radius, update(), kill()
-    │   ├── Player.js            # Movement, health, fire cooldown, aim direction
-    │   ├── Enemy.js             # Moves toward player, hp=1
-    │   ├── FastEnemy.js         # 1.8x speed, diamond shape
-    │   ├── TankEnemy.js         # hp=3, square shape, color shifts per hit
-    │   ├── Bullet.js            # Directional with prevX/prevY for lerp rendering
-    │   ├── PowerUp.js           # Health restore or score bonus, lifetime timer
-    │   └── EntityManager.js     # Tracks arrays by type, removeAllDead()
+    │   ├── Player.js            # Dual-state: flight/falling/impact, flight meter, slam
+    │   ├── EnergyBurst.js       # Downward projectile (auto-fires in flight mode)
+    │   ├── DataBlocker.js       # Floating platform obstacle, drifts horizontally
+    │   ├── ChaserBot.js         # Ground enemy, chases player when on ground
+    │   ├── GravityFlare.js      # Pull-down hazard with gravity radius
+    │   ├── XPOrb.js             # Collectible, magnetizes to player on ground
+    │   └── EntityManager.js     # Tracks bursts, blockers, chasers, flares, xpOrbs
     ├── systems/
-    │   ├── InputSystem.js       # Held keys + fire queue, works with synthetic mobile events
-    │   ├── CollisionSystem.js   # Circle collision, callback-based
-    │   └── SpawnSystem.js       # Weighted pool, entity unlock times, density caps
+    │   ├── InputSystem.js       # Hold/release + horizontal, synthetic mobile events
+    │   ├── CollisionSystem.js   # State-dependent: intangible in flight, slam AOE
+    │   └── SpawnSystem.js       # Vertical trench spawning, density caps, unlock times
     ├── config/
     │   └── difficulty.js        # Phases, spawn intervals, speed curves
     ├── audio/
@@ -70,7 +72,7 @@ src/
     ├── effects/
     │   └── EffectsManager.js    # Particle explosions, screen shake, screen flash
     ├── rendering/
-    │   └── EntityRenderer.js    # BOTH Graphics API and Sprite rendering
+    │   └── EntityRenderer.js    # All Graphics API, neon voxel aesthetic, synthwave grid
     ├── hud/
     │   └── HUD.js               # Score, health bar, multiplier, warnings
     ├── scenes/
@@ -94,47 +96,28 @@ SplashScene (2s) → TitleScene → GameScene → GameOverScene → TitleScene
                                     └───── restart ─────────────┘
 ```
 
-## 3. Rendering — Two Approaches
+## 3. Rendering — All Graphics API
 
-This boilerplate demonstrates **both** rendering approaches side by side:
+Vector Drift uses **only** the Graphics API for rendering. No sprites. Blocky voxel shapes with neon synthwave aesthetic.
 
-### A. Graphics API (Programmatic)
-Used for: Player, Bullets, HUD elements
+### Neon Voxel Style
+- Player: mode-colored square (cyan=flight, orange=falling, magenta=impact) with directional indicators
+- Data Blockers: wide flat rectangles with warning stripes and HP dots
+- Chaser Bots: triangles with eye dots
+- Gravity Flares: pulsing diamonds with pull radius indicator
+- XP Orbs: glowing squares
+- Energy Bursts: small neon squares with glow
+- Background: scrolling synthwave grid with center highlight
+- Ground: magenta line at GROUND_Y with subtle fill below
+- Particles: blocky squares (not circles)
 
 ```javascript
-// Drawing a player ship (triangle)
+// Example: drawing a voxel square
 gfx.fillStyle(color, 0.8);
-gfx.fillTriangle(tipX, tipY, leftX, leftY, rightX, rightY);
+gfx.fillRect(x - s, y - s, s * 2, s * 2);
 gfx.lineStyle(2, color, 1);
-gfx.beginPath();
-gfx.moveTo(tipX, tipY);
-gfx.lineTo(leftX, leftY);
-gfx.lineTo(rightX, rightY);
-gfx.closePath();
-gfx.strokePath();
+gfx.strokeRect(x - s, y - s, s * 2, s * 2);
 ```
-
-**When to use:** Prototyping, vector aesthetics, procedural effects, games with geometric shapes.
-
-### B. Sprite-Based
-Used for: Enemies, PowerUps (with Graphics API fallback)
-
-```javascript
-// In scene preload():
-this.load.spritesheet('enemy', 'sprites/enemy.png', { frameWidth: 32, frameHeight: 32 });
-
-// In EntityRenderer, sprites are synced with entity positions:
-sprite = this.scene.add.sprite(entity.x, entity.y, textureKey);
-sprite.setScale(entity.radius / 16);
-```
-
-**When to use:** Detailed characters, animation frames, pixel art, production games.
-
-### Switching Everything to One Approach
-
-To go **all Graphics API**: Remove sprite preloading from GameScene, set `_useFallbackGraphics = true` in EntityRenderer.
-
-To go **all Sprites**: Create spritesheets for player and bullets, add sprite sync for those entity types in EntityRenderer.
 
 ## 4. Entity System
 
@@ -169,11 +152,11 @@ export class Entity {
 
 ### Adding a New Entity Type
 
-1. Create `src/game/entities/MyEntity.js` extending `Entity` or `Enemy`
+1. Create `src/game/entities/MyEntity.js` extending `Entity`
 2. Add type-specific update logic (movement, behavior)
-3. Add to `EntityManager` (new array + add/remove methods if needed)
+3. Add to `EntityManager` (new array + add/remove methods)
 4. Add to `SpawnSystem` (weight, unlock time, density cap)
-5. Add rendering in `EntityRenderer` (Graphics and/or sprite)
+5. Add rendering method in `EntityRenderer` (Graphics API)
 6. Add collision handling in `CollisionSystem` if it interacts differently
 7. Add to `CONFIG` (speed, radius, colors, etc.)
 8. Add to `difficulty.js` unlock table if gated
@@ -181,23 +164,27 @@ export class Entity {
 ## 5. Systems
 
 ### InputSystem
-- Tracks held keys via `keydown`/`keyup` window events
-- Returns `{ left, right, up, down, fire }` state each frame
-- Fire uses a queue (FIFO) to prevent input loss on rapid taps
+- Tracks hold state (Space/W/ArrowUp) for flight toggle
+- Tracks horizontal movement (ArrowLeft/A, ArrowRight/D)
+- Returns `{ holding, horizontal, justPressed, justReleased }` each frame
+- `holding` = true while Space/W/ArrowUp is held (flight mode)
+- `horizontal` = -1/0/+1 for left/neutral/right
 - Mobile touch zones dispatch synthetic `KeyboardEvent`s — game code never branches on input type
 - Clean up listeners on scene shutdown to prevent leaks
 
 ### CollisionSystem
 - Circle-based collision: `distanceSq(a, b) < (a.radius + b.radius)²`
-- Callback-driven: `onEnemyKilled`, `onPlayerHit`, `onPowerUpCollected`
+- State-dependent: player is intangible during flight mode (enemies pass through)
+- Slam AOE: when player lands, damages all enemies within `IMPACT_SLAM_RADIUS`
+- Callback-driven: `onEnemyKilled`, `onEnemyHit`, `onPlayerHit`, `onXPCollected`, `onSlam`
 - Callbacks fire during collision check; actual entity removal happens later in `removeAllDead()`
 
 ### SpawnSystem
 - **Weighted pool:** Each entity type has a base weight for random selection
-- **Unlock times:** Entity types unlock at specific elapsed seconds (not randomly from start)
-- **Density caps:** Max concurrent entities of same type (prevents screen flooding)
-- **Spawn position:** Random edge of screen (top/right/bottom/left)
-- **Difficulty scaling:** Spawn interval and speed multiplier from `difficulty.js`
+- **Unlock times:** Blockers at 0s, Chasers at 15s, Flares at 30s
+- **Density caps:** Max concurrent: 8 blockers, 6 chasers, 4 flares
+- **Spawn position:** Blockers/Flares from above camera, Chasers from screen edges at ground level
+- **Difficulty scaling:** Spawn interval and scroll speed from `difficulty.js`
 
 ## 6. Difficulty System
 
@@ -205,14 +192,15 @@ Located in `src/game/config/difficulty.js`. Returns difficulty parameters based 
 
 | Phase | Time | What Changes |
 |-------|------|-------------|
-| WARMUP | 0-30s | Slow spawns, basic enemies only |
-| RAMP | 30-60s | Fast enemies unlock, speed increases |
-| MIDGAME | 60-120s | Tanks unlock, faster spawns |
-| LATEGAME | 120s+ | Everything unlocked, max pressure |
+| WARMUP | 0-30s | Slow spawns (2500ms), blockers only |
+| RAMP | 30-60s | Chasers unlock at 15s, flares at 30s, spawn rate increases |
+| MIDGAME | 60-120s | All types active, faster spawns, scroll speeds up |
+| LATEGAME | 120s+ | Everything maxed, spawn interval floors at 600ms |
 
 **Tuning guide:**
-- `spawnInterval`: Lower = more enemies. Floor at 400ms prevents unplayable density.
-- `speedMultiplier`: Applied to all enemy speeds. Caps at 2.0.
+- `spawnInterval`: Starts at 2500ms, drops by 10ms/sec, floors at 600ms.
+- `scrollMultiplier`: Ramps from 1.0 to 2.5 over 200s.
+- `speedMultiplier`: Applied to enemy speeds. Caps at 2.0.
 - Unlock times in `SpawnSystem.js` control when new enemy types appear.
 - Density caps in `SpawnSystem.js` prevent any one type from dominating.
 
@@ -243,8 +231,7 @@ this.soundEngine.playSound('shoot');
 `game.html` has a mobile wrapper with:
 - Game canvas area (top, flex-grows to fill)
 - Touch control bar (bottom, fixed 140px height)
-- D-pad: UP/DOWN/LEFT/RIGHT zones
-- Action buttons: FIRE, PAUSE
+- LEFT button (ArrowLeft), center HOLD button (Space = flight), RIGHT button (ArrowRight)
 
 ### Synthetic Events
 Touch zones dispatch synthetic `KeyboardEvent`s:
@@ -267,12 +254,12 @@ Game code never checks `isMobile()` for input — it always reads keyboard state
 ## 9. How-To Recipes for Claude Code
 
 ### How to add a new entity type
-1. Create class in `entities/` extending `Entity` or `Enemy`
+1. Create class in `entities/` extending `Entity`
 2. Add constants to `config.js` (speed, radius, color, hp)
-3. Add to `EntityManager` — usually just push to `enemies[]` array
+3. Add to `EntityManager` — new array + add method
 4. Add spawn logic in `SpawnSystem` — weight, unlock time, density cap
-5. Add rendering in `EntityRenderer._drawEnemyGraphics()` for Graphics, or load spritesheet
-6. Wire collision callbacks in `GameScene.create()` if special behavior
+5. Add rendering method in `EntityRenderer` (Graphics API only)
+6. Wire collision callbacks in `GameScene._wireCollisions()` if special behavior
 
 ### How to add a new scene
 1. Create `scenes/MyScene.js` extending `Phaser.Scene`
@@ -284,16 +271,12 @@ Game code never checks `isMobile()` for input — it always reads keyboard state
 2. Add `this.loadSound('name', 'sounds/name.mp3')` in `SoundEngine.init()`
 3. Call `this.soundEngine.playSound('name')` where needed
 
-### How to switch all rendering to sprites
-1. Create spritesheets for player and bullets
-2. In `EntityRenderer`, add sprite sync for player/bullet entity types
-3. Remove Graphics drawing code for those types
-4. Set `_useFallbackGraphics = false` (or remove the flag entirely)
-
-### How to switch all rendering to Graphics API
-1. In `EntityRenderer` constructor, set `this._useFallbackGraphics = true`
-2. Remove sprite preloading from `GameScene.preload()`
-3. Add custom Graphics drawing in `_drawEnemyGraphics()` for each type
+### How to add sprite rendering
+Vector Drift uses all Graphics API rendering. To add sprites:
+1. Place spritesheets in `public/sprites/`
+2. Add `this.load.spritesheet()` calls in `GameScene.preload()`
+3. In `EntityRenderer`, add sprite sync for the entity type
+4. Replace or supplement the Graphics API draw method
 
 ### How to adjust difficulty curve
 1. Edit `src/game/config/difficulty.js`
@@ -396,22 +379,26 @@ All game constants in `src/game/config.js` (frozen, immutable at runtime):
 | Constant | Value | Description |
 |----------|-------|-------------|
 | WIDTH / HEIGHT | 800 / 600 | Game canvas resolution |
-| PLAYER_SPEED | 200 | Pixels per second |
-| PLAYER_RADIUS | 12 | Collision circle radius |
+| PLAYER_HORIZONTAL_SPEED | 250 | Left/right movement speed |
+| PLAYER_RADIUS | 10 | Collision circle radius |
 | PLAYER_MAX_HEALTH | 100 | Starting health |
 | PLAYER_INVULN_MS | 1500 | Invulnerability after hit |
-| BULLET_SPEED | 500 | Bullet pixels per second |
-| BULLET_RADIUS | 4 | Bullet collision radius |
-| FIRE_COOLDOWN_MS | 150 | Min time between shots |
-| ENEMY_SPEED | 80 | Basic enemy speed |
-| ENEMY_RADIUS | 12 | Basic enemy collision radius |
-| FAST_ENEMY_SPEED | 144 | 1.8x basic speed |
-| TANK_ENEMY_SPEED | 50 | Slow but tough |
-| TANK_ENEMY_HP | 3 | Hits to kill tank |
-| POWERUP_LIFETIME_MS | 8000 | Time before powerup despawns |
-| SCORE_PER_KILL | 100 | Base kill score (multiplied) |
+| FLIGHT_RISE_SPEED | 120 | Upward float speed |
+| FLIGHT_METER_MAX | 100 | Flight meter capacity |
+| FLIGHT_METER_DRAIN | 20 | Drain per second while flying |
+| FLIGHT_METER_RECHARGE | 35 | Recharge per second on ground |
+| FLIGHT_FIRE_COOLDOWN_MS | 300 | Auto-fire interval in flight |
+| FLIGHT_FIRE_SPEED | 400 | Energy burst speed (downward) |
+| IMPACT_FALL_ACCEL | 800 | Gravity acceleration (px/s^2) |
+| IMPACT_SLAM_RADIUS | 60 | AOE damage radius on landing |
+| IMPACT_SLAM_DAMAGE | 2 | Damage dealt on slam |
+| IMPACT_SLIDE_SPEED | 180 | Ground slide speed |
+| GROUND_Y | 500 | Ground level (pixels from top) |
+| BLOCKER_HP | 2 | Hits to destroy data blocker |
+| CHASER_SPEED | 100 | Chaser bot movement speed |
+| FLARE_PULL_RADIUS | 120 | Gravity flare pull range |
+| XP_ORB_MAGNET_SPEED | 300 | Speed when magnetized to player |
 | MULTIPLIER_MAX | 5.0 | Max score multiplier |
-| MULTIPLIER_DECAY_MS | 3000 | Time before multiplier starts decaying |
 | ARENA_MARGIN | 40 | Spawn distance from edge |
 
 ## 12. Optional Add-Ons

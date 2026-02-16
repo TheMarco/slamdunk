@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Game Starter Kit</title>
+  <title>Vector Drift</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -81,26 +81,15 @@
     .touch-zone.flash {
       background: radial-gradient(circle, rgba(0, 255, 136, 0.3) 0%, transparent 70%);
     }
-    /* D-pad area (left side) */
-    #touch-dpad {
+    /* Vector Drift: LEFT / HOLD / RIGHT layout */
+    #touch-controls .touch-zone.hold-zone {
       flex: 2;
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
+      background: #0a0a1a;
+      color: #00ffff;
+      font-size: 14px;
     }
-    #touch-dpad .touch-zone {
-      border-right: 1px solid #222;
-      border-bottom: 1px solid #222;
-    }
-    /* Action buttons (right side) */
-    #touch-actions {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    #touch-actions .touch-zone {
-      flex: 1;
-      border-bottom: 1px solid #222;
+    #touch-controls .touch-zone.hold-zone.flash {
+      background: radial-gradient(circle, rgba(0, 255, 255, 0.3) 0%, transparent 70%);
     }
 
     body.mobile-mode {
@@ -114,18 +103,9 @@
   <div id="mobile-wrapper">
     <div id="mobile-game-area"></div>
     <div id="touch-controls">
-      <div id="touch-dpad">
-        <div class="touch-zone" data-key=""></div>
-        <div class="touch-zone" data-key="ArrowUp">UP</div>
-        <div class="touch-zone" data-key=""></div>
-        <div class="touch-zone" data-key="ArrowLeft">LEFT</div>
-        <div class="touch-zone" data-key="ArrowDown">DOWN</div>
-        <div class="touch-zone" data-key="ArrowRight">RIGHT</div>
-      </div>
-      <div id="touch-actions">
-        <div class="touch-zone" data-key="Space" id="touch-fire">FIRE</div>
-        <div class="touch-zone" data-key="Escape" id="touch-pause">PAUSE</div>
-      </div>
+      <div class="touch-zone" data-key="ArrowLeft">◄</div>
+      <div class="touch-zone hold-zone" data-key="Space" id="touch-hold">HOLD</div>
+      <div class="touch-zone" data-key="ArrowRight">►</div>
     </div>
   </div>
 

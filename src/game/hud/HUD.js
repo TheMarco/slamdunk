@@ -1,96 +1,210 @@
 import { CONFIG } from '../config.js';
 
 export class HUD {
-  constructor(scene) {
+  constructor(scene, gameState) {
     this.scene = scene;
+    this._displayScore = 0;
+    this._popups = [];
 
-    // Score text (top left)
+    // Score
     this.scoreText = scene.add.text(16, 16, 'SCORE: 0', {
       fontFamily: 'Courier New',
       fontSize: '18px',
-      color: CONFIG.COLORS.HUD,
+      color: CONFIG.HUD_COLOR,
     }).setDepth(100);
-
-    // Multiplier (top left, below score)
-    this.multiText = scene.add.text(16, 40, '', {
-      fontFamily: 'Courier New',
-      fontSize: '14px',
-      color: '#ffdd44',
-    }).setDepth(100);
-
-    // Health bar (top right)
-    this.healthLabel = scene.add.text(CONFIG.WIDTH - 16, 16, 'HEALTH', {
-      fontFamily: 'Courier New',
-      fontSize: '12px',
-      color: CONFIG.COLORS.HUD,
-      align: 'right',
-    }).setOrigin(1, 0).setDepth(100);
-
-    // Health bar graphics
-    this.healthGfx = scene.add.graphics().setDepth(100);
-
-    // Warning text (center, flashes)
-    this.warningText = scene.add.text(CONFIG.CENTER_X, CONFIG.CENTER_Y - 100, '', {
-      fontFamily: 'Courier New',
-      fontSize: '20px',
-      color: '#ff4444',
-      align: 'center',
-    }).setOrigin(0.5).setDepth(100).setAlpha(0);
-
-    this._warningTimer = 0;
-  }
-
-  update(state, player) {
-    // Score
-    this.scoreText.setText(`SCORE: ${state.score}`);
 
     // Multiplier
-    if (state.multiplier > 1.0) {
-      this.multiText.setText(`x${state.multiplier.toFixed(2)}`);
-      this.multiText.setAlpha(1);
-    } else {
-      this.multiText.setAlpha(0);
-    }
+    this.multiplierText = scene.add.text(16, 40, '', {
+      fontFamily: 'Courier New',
+      fontSize: '14px',
+      color: '#ffaa00',
+    }).setDepth(100);
+
+    // Combo display (center-top)
+    this.comboText = scene.add.text(CONFIG.CENTER_X, 16, '', {
+      fontFamily: 'Courier New',
+      fontSize: '20px',
+      color: '#ffdd44',
+      align: 'center',
+    }).setOrigin(0.5, 0).setDepth(100).setVisible(false);
+
+    // Kills display
+    this.killsText = scene.add.text(16, 58, '', {
+      fontFamily: 'Courier New',
+      fontSize: '11px',
+      color: '#888888',
+    }).setDepth(100);
+
+    // Phase display
+    this.phaseText = scene.add.text(CONFIG.CENTER_X, CONFIG.HEIGHT - 16, '', {
+      fontFamily: 'Courier New',
+      fontSize: '10px',
+      color: '#444444',
+      align: 'center',
+    }).setOrigin(0.5, 1).setDepth(100);
+
+    // Active power-ups display
+    this.powerUpText = scene.add.text(16, 74, '', {
+      fontFamily: 'Courier New',
+      fontSize: '11px',
+      color: '#00ff88',
+    }).setDepth(100);
+
+    // Mode indicator
+    this.modeText = scene.add.text(CONFIG.WIDTH - 16, 16, 'IMPACT', {
+      fontFamily: 'Courier New',
+      fontSize: '14px',
+      color: CONFIG.HUD_COLOR,
+    }).setOrigin(1, 0).setDepth(100);
 
     // Health bar
-    this.healthGfx.clear();
-    const barW = 150;
-    const barH = 12;
-    const barX = CONFIG.WIDTH - 16 - barW;
-    const barY = 32;
+    this.healthLabel = scene.add.text(CONFIG.WIDTH - 16, 40, 'HP', {
+      fontFamily: 'Courier New',
+      fontSize: '12px',
+      color: CONFIG.HUD_COLOR,
+    }).setOrigin(1, 0).setDepth(100);
 
-    // Background
-    this.healthGfx.fillStyle(0x333333, 0.8);
-    this.healthGfx.fillRect(barX, barY, barW, barH);
+    // Flight meter bar (drawn with graphics in update)
+    this.hudGfx = scene.add.graphics().setDepth(100);
 
-    // Health fill
-    const pct = state.health / CONFIG.PLAYER_MAX_HEALTH;
-    const fillColor = pct > 0.5 ? 0x00ff88 : pct > 0.25 ? 0xffaa00 : 0xff4444;
-    this.healthGfx.fillStyle(fillColor, 0.9);
-    this.healthGfx.fillRect(barX, barY, barW * pct, barH);
-
-    // Border
-    this.healthGfx.lineStyle(1, 0x666666, 1);
-    this.healthGfx.strokeRect(barX, barY, barW, barH);
+    // Pause text
+    this.pauseText = scene.add.text(CONFIG.CENTER_X, CONFIG.CENTER_Y, 'PAUSED', {
+      fontFamily: 'Courier New',
+      fontSize: '32px',
+      color: '#ffffff',
+    }).setOrigin(0.5).setDepth(100).setVisible(false);
 
     // Low health warning
-    if (pct <= 0.25 && !state.gameOver) {
-      this._warningTimer += 16;
-      const flash = Math.sin(this._warningTimer / 200) > 0 ? 1 : 0;
-      this.warningText.setText('LOW HEALTH!');
-      this.warningText.setAlpha(flash * 0.8);
+    this._warnFlash = 0;
+    this.warnText = scene.add.text(CONFIG.CENTER_X, CONFIG.CENTER_Y + 80, 'LOW HEALTH!', {
+      fontFamily: 'Courier New',
+      fontSize: '16px',
+      color: CONFIG.HUD_WARN,
+    }).setOrigin(0.5).setDepth(100).setVisible(false);
+  }
+
+  // --- Task 3.2: Floating score/combo popup system ---
+  spawnPopup(x, y, message, color, fontSize) {
+    const text = this.scene.add.text(x, y, message, {
+      fontFamily: 'Courier New',
+      fontSize: `${fontSize || 14}px`,
+      color: color || '#ffffff',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(110);
+
+    this._popups.push({
+      text,
+      life: 0,
+      maxLife: 1000,
+      startY: y,
+    });
+  }
+
+  update(gameState, player, paused) {
+    // --- Task 3.1: Animated score counter ---
+    this._displayScore += (gameState.score - this._displayScore) * 0.1;
+    if (Math.abs(this._displayScore - gameState.score) < 1) {
+      this._displayScore = gameState.score;
+    }
+    this.scoreText.setText(`SCORE: ${Math.floor(this._displayScore)}`);
+
+    // Multiplier
+    if (gameState.multiplier > 1.0) {
+      this.multiplierText.setText(`x${gameState.multiplier.toFixed(1)}`);
+      this.multiplierText.setVisible(true);
     } else {
-      this.warningText.setAlpha(0);
-      this._warningTimer = 0;
+      this.multiplierText.setVisible(false);
     }
 
-    // Pause overlay
-    if (this.scene._paused) {
-      this.warningText.setText('PAUSED');
-      this.warningText.setAlpha(1);
-      this.warningText.setColor('#ffffff');
+    // --- Task 3.3: Combo counter ---
+    if (gameState.comboCount >= 3) {
+      const comboMult = gameState.getComboMultiplier();
+      const comboColors = { 2: '#ffdd44', 3: '#ff6600', 5: '#ff00ff' };
+      this.comboText.setText(`COMBO ${gameState.comboCount} (x${comboMult})`);
+      this.comboText.setColor(comboColors[comboMult] || '#ffdd44');
+      this.comboText.setVisible(true);
     } else {
-      this.warningText.setColor('#ff4444');
+      this.comboText.setVisible(false);
+    }
+
+    // Kills
+    this.killsText.setText(`KILLS: ${gameState.kills}`);
+
+    // Phase
+    this.phaseText.setText(gameState.phaseReached || '');
+
+    // Active power-ups
+    const activeBuffs = [];
+    if (gameState.scoreBoostTimer > 0) activeBuffs.push(`SCORE x2 ${Math.ceil(gameState.scoreBoostTimer / 1000)}s`);
+    if (player.shieldActive) activeBuffs.push('SHIELD');
+    if (player.slamPlusActive) activeBuffs.push('MEGA SLAM');
+    this.powerUpText.setText(activeBuffs.join(' | '));
+
+    // Mode
+    const modeNames = { flight: 'FLIGHT', falling: 'FALLING', impact: 'IMPACT' };
+    const modeColors = {
+      flight: '#00ffff',
+      falling: '#ff6600',
+      impact: '#ff00ff',
+    };
+    this.modeText.setText(modeNames[gameState.playerMode] || 'IMPACT');
+    this.modeText.setColor(modeColors[gameState.playerMode] || '#00ffff');
+
+    // HUD graphics (health bar + flight meter)
+    this.hudGfx.clear();
+
+    // Health bar (top right)
+    const hbX = CONFIG.WIDTH - 120;
+    const hbY = 58;
+    const hbW = 100;
+    const hbH = 8;
+    const hpFill = gameState.health / CONFIG.PLAYER_MAX_HEALTH;
+
+    this.hudGfx.fillStyle(0x333333, 0.6);
+    this.hudGfx.fillRect(hbX, hbY, hbW, hbH);
+
+    const hpColor = hpFill > 0.5 ? 0x00ff88 : hpFill > 0.25 ? 0xffaa00 : 0xff4444;
+    this.hudGfx.fillStyle(hpColor, 0.8);
+    this.hudGfx.fillRect(hbX, hbY, hbW * hpFill, hbH);
+
+    this.hudGfx.lineStyle(1, 0xffffff, 0.3);
+    this.hudGfx.strokeRect(hbX, hbY, hbW, hbH);
+
+    // Flight meter (below health bar)
+    const fmY = hbY + 14;
+    const fmFill = gameState.flightMeter / CONFIG.FLIGHT_METER_MAX;
+
+    this.hudGfx.fillStyle(0x333333, 0.6);
+    this.hudGfx.fillRect(hbX, fmY, hbW, hbH);
+
+    this.hudGfx.fillStyle(CONFIG.PLAYER_FLIGHT, 0.8);
+    this.hudGfx.fillRect(hbX, fmY, hbW * fmFill, hbH);
+
+    this.hudGfx.lineStyle(1, 0xffffff, 0.3);
+    this.hudGfx.strokeRect(hbX, fmY, hbW, hbH);
+
+    // Pause
+    this.pauseText.setVisible(paused);
+
+    // Low health warning
+    if (gameState.health <= 25 && gameState.health > 0 && !gameState.gameOver) {
+      this._warnFlash += 0.1;
+      this.warnText.setVisible(Math.sin(this._warnFlash) > 0);
+    } else {
+      this.warnText.setVisible(false);
+    }
+
+    // Update popups
+    for (let i = this._popups.length - 1; i >= 0; i--) {
+      const popup = this._popups[i];
+      popup.life += 16; // approximate 60fps
+      const t = popup.life / popup.maxLife;
+      popup.text.setY(popup.startY - 60 * t);
+      popup.text.setAlpha(1 - t);
+      if (popup.life >= popup.maxLife) {
+        popup.text.destroy();
+        this._popups.splice(i, 1);
+      }
     }
   }
 }

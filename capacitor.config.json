@@ -1,6 +1,6 @@
 {
-  "appId": "com.example.gameboilerplate",
-  "appName": "Game Boilerplate",
+  "appId": "com.vectordrift.game",
+  "appName": "Vector Drift",
   "webDir": "dist",
   "server": {
     "androidScheme": "https"
