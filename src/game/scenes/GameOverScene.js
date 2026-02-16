@@ -24,7 +24,7 @@ export class GameOverScene extends Phaser.Scene {
     this.add.text(cx, cy - 120, 'GAME OVER', {
       fontFamily: 'Courier New',
       fontSize: '40px',
-      color: '#ff4444',
+      color: '#cc3333',
       align: 'center',
     }).setOrigin(0.5);
 
@@ -38,7 +38,7 @@ export class GameOverScene extends Phaser.Scene {
     this.add.text(cx, cy - 20, `KILLS: ${this.kills}  |  SLAMS: ${this.slamCount}`, {
       fontFamily: 'Courier New',
       fontSize: '14px',
-      color: '#888888',
+      color: '#446644',
       align: 'center',
     }).setOrigin(0.5);
 
@@ -46,7 +46,7 @@ export class GameOverScene extends Phaser.Scene {
     this.add.text(cx, cy + 5, `BEST COMBO: ${this.bestCombo}  |  PHASE: ${this.phaseReached}`, {
       fontFamily: 'Courier New',
       fontSize: '12px',
-      color: '#666666',
+      color: '#335533',
       align: 'center',
     }).setOrigin(0.5);
 
@@ -54,7 +54,7 @@ export class GameOverScene extends Phaser.Scene {
       this.add.text(cx, cy + 35, 'NEW HIGH SCORE!', {
         fontFamily: 'Courier New',
         fontSize: '18px',
-        color: '#ffdd44',
+        color: '#ccaa33',
         align: 'center',
       }).setOrigin(0.5);
     } else {
@@ -62,7 +62,7 @@ export class GameOverScene extends Phaser.Scene {
       this.add.text(cx, cy + 35, `HIGH SCORE: ${hi}`, {
         fontFamily: 'Courier New',
         fontSize: '16px',
-        color: '#888888',
+        color: '#446644',
         align: 'center',
       }).setOrigin(0.5);
     }
@@ -71,7 +71,7 @@ export class GameOverScene extends Phaser.Scene {
     this.prompt = this.add.text(cx, cy + 80, 'PRESS SPACE TO RESTART', {
       fontFamily: 'Courier New',
       fontSize: '16px',
-      color: '#00ffff',
+      color: '#33aa77',
       align: 'center',
     }).setOrigin(0.5);
     this.promptAlpha = 1;
@@ -80,7 +80,7 @@ export class GameOverScene extends Phaser.Scene {
     this.add.text(cx, cy + 120, 'PRESS M FOR MENU', {
       fontFamily: 'Courier New',
       fontSize: '12px',
-      color: '#444444',
+      color: '#223322',
       align: 'center',
     }).setOrigin(0.5);
 

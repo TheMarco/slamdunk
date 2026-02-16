@@ -86,19 +86,19 @@ export const CONFIG = Object.freeze({
   ARENA_MARGIN: 40,
   SPAWN_AHEAD_DISTANCE: 100,    // how far above camera to spawn
 
-  // Colors — Neon Voxel Palette
-  BG: 0x0a0614,                 // deep purple-black
-  GRID_COLOR: 0x2a1050,         // synthwave grid lines
-  GRID_HIGHLIGHT: 0x6020a0,     // brighter grid accent
-  PLAYER_FLIGHT: 0x00ffff,      // cyan (flight mode)
-  PLAYER_IMPACT: 0xff00ff,      // magenta (impact mode)
-  PLAYER_FALLING: 0xff6600,     // orange (falling)
-  BURST_COLOR: 0x00ffdd,        // cyan-green energy burst
-  BLOCKER_COLOR: 0xff2080,      // hot pink (data blocker)
-  CHASER_COLOR: 0xffaa00,       // amber (chaser bot)
-  FLARE_COLOR: 0xaa00ff,        // purple (gravity flare)
-  XP_ORB_COLOR: 0x88ff00,       // lime green (XP orb)
-  SLAM_FLASH: 0xff00ff,         // magenta slam flash
+  // Colors — Cyberpunk Terminal Palette
+  BG: 0x080c10,                 // cold blue-black
+  GRID_COLOR: 0x1a2a1a,         // dark terminal green
+  GRID_HIGHLIGHT: 0x2a4a2a,     // muted green accent
+  PLAYER_FLIGHT: 0x00cc99,      // teal-green (flight mode)
+  PLAYER_IMPACT: 0xcc4400,      // burnt orange (impact mode)
+  PLAYER_FALLING: 0xffaa22,     // amber-yellow (falling)
+  BURST_COLOR: 0x00aa77,        // dark teal energy burst
+  BLOCKER_COLOR: 0x4488aa,      // steel blue (data blocker)
+  CHASER_COLOR: 0xcc3333,       // dark red (chaser bot)
+  FLARE_COLOR: 0x8844cc,        // desaturated purple (gravity flare)
+  XP_ORB_COLOR: 0x33dd66,       // data green (XP orb)
+  SLAM_FLASH: 0xcc4400,         // burnt orange slam flash
 
   // Shield Drone
   SHIELD_DRONE_RADIUS: 7,
@@ -107,7 +107,7 @@ export const CONFIG = Object.freeze({
   SHIELD_DRONE_SCORE: 75,
   SHIELD_DRONE_ORBIT_RADIUS: 40,
   SHIELD_DRONE_ORBIT_SPEED: 3,
-  SHIELD_DRONE_COLOR: 0x44ddff,
+  SHIELD_DRONE_COLOR: 0x336699,
 
   // Laser Gate
   LASER_ANCHOR_RADIUS: 8,
@@ -116,8 +116,8 @@ export const CONFIG = Object.freeze({
   LASER_CYCLE_MS: 1500,
   LASER_BEAM_ON_MS: 900,
   LASER_DRIFT_VY: 12,
-  LASER_COLOR: 0xff4444,
-  LASER_BEAM_COLOR: 0xff2222,
+  LASER_COLOR: 0xcc2222,
+  LASER_BEAM_COLOR: 0xff3300,
 
   // Power-ups
   POWERUP_RADIUS: 10,
@@ -130,6 +130,6 @@ export const CONFIG = Object.freeze({
   COMBO_WINDOW_MS: 3000,
 
   // Colors
-  HUD_COLOR: '#00ffff',         // cyan HUD text
-  HUD_WARN: '#ff2080',          // pink warning text
+  HUD_COLOR: '#33aa77',         // terminal green HUD text
+  HUD_WARN: '#cc3333',          // alert red warning text
 });

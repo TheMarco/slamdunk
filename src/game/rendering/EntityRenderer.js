@@ -1,7 +1,6 @@
 import { CONFIG } from '../config.js';
 import { lerp } from '../utils/math.js';
 
-const GRID_HORIZON_Y = 60;
 const TWO_PI = Math.PI * 2;
 const HALF_PI = Math.PI / 2;
 
@@ -10,9 +9,8 @@ export class EntityRenderer {
     this.scene = scene;
     this.gridOffset = 0;
     this._time = 0;
-    this._initStarfield();
-    this._initNebulae();
-    this._initShootingStars();
+    this._initCircuitTraces();
+    this._initScanBeams();
     this._playerTrail = [];
     this._trailTimer = 0;
   }
@@ -101,244 +99,318 @@ export class EntityRenderer {
   }
 
   // =============================================
-  //  STARFIELD
+  //  CIRCUIT TRACES (data bus lines with junction nodes + bright packets)
   // =============================================
-  _initStarfield() {
-    this.starLayers = [];
-    const layerConfigs = [
-      { count: 60, speed: 8, sizeMin: 0.5, sizeMax: 1.0, alpha: 0.3 },
-      { count: 40, speed: 20, sizeMin: 1.0, sizeMax: 1.8, alpha: 0.5 },
-      { count: 20, speed: 40, sizeMin: 1.5, sizeMax: 2.5, alpha: 0.7 },
-    ];
-    for (const cfg of layerConfigs) {
-      const stars = [];
-      for (let i = 0; i < cfg.count; i++) {
-        stars.push({
-          x: Math.random() * CONFIG.WIDTH,
-          y: Math.random() * CONFIG.HEIGHT,
-          size: cfg.sizeMin + Math.random() * (cfg.sizeMax - cfg.sizeMin),
-          twinklePhase: Math.random() * Math.PI * 2,
-          twinkleSpeed: 1.5 + Math.random() * 2,
+  _initCircuitTraces() {
+    this._circuits = [];
+    // Horizontal traces
+    const hPositions = [60, 130, 200, 280, 350, 420, 480];
+    for (const pos of hPositions) {
+      this._circuits.push({
+        horizontal: true,
+        pos: pos + (Math.random() - 0.5) * 20,
+        packets: [],
+        packetTimer: Math.random() * 2,
+        packetInterval: 0.8 + Math.random() * 1.5,
+      });
+    }
+    // Vertical traces
+    const vPositions = [80, 180, 300, 400, 520, 640, 720];
+    for (const pos of vPositions) {
+      this._circuits.push({
+        horizontal: false,
+        pos: pos + (Math.random() - 0.5) * 20,
+        packets: [],
+        packetTimer: Math.random() * 2,
+        packetInterval: 0.8 + Math.random() * 1.5,
+      });
+    }
+    // Build junction list (intersections of H and V traces)
+    this._junctions = [];
+    for (const h of this._circuits.filter(c => c.horizontal)) {
+      for (const v of this._circuits.filter(c => !c.horizontal)) {
+        this._junctions.push({ x: v.pos, y: h.pos, phase: Math.random() * TWO_PI });
+      }
+    }
+  }
+
+  _drawCircuitTraces(gfx, dt) {
+    const t = this._time;
+
+    for (const c of this._circuits) {
+      // Draw trace line — visible green
+      gfx.lineStyle(1, CONFIG.GRID_COLOR, 0.2);
+      gfx.beginPath();
+      if (c.horizontal) {
+        gfx.moveTo(0, c.pos);
+        gfx.lineTo(CONFIG.WIDTH, c.pos);
+      } else {
+        gfx.moveTo(c.pos, 0);
+        gfx.lineTo(c.pos, CONFIG.HEIGHT);
+      }
+      gfx.strokePath();
+
+      // Spawn packets more aggressively
+      c.packetTimer -= dt;
+      if (c.packetTimer <= 0) {
+        c.packetTimer = c.packetInterval;
+        const maxDim = c.horizontal ? CONFIG.WIDTH : CONFIG.HEIGHT;
+        const dir = Math.random() > 0.5 ? 1 : -1;
+        c.packets.push({
+          t: dir > 0 ? -5 : maxDim + 5,
+          speed: 80 + Math.random() * 120,
+          dir,
+          len: 8 + Math.random() * 16,
         });
       }
-      this.starLayers.push({ stars, ...cfg });
-    }
-  }
 
-  _drawStarfield(gfx, dt) {
-    for (const layer of this.starLayers) {
-      for (const star of layer.stars) {
-        star.y += layer.speed * dt;
-        if (star.y > CONFIG.HEIGHT) {
-          star.y -= CONFIG.HEIGHT;
-          star.x = Math.random() * CONFIG.WIDTH;
+      // Update and draw packets — bright streaks
+      for (let j = c.packets.length - 1; j >= 0; j--) {
+        const p = c.packets[j];
+        p.t += p.speed * p.dir * dt;
+        const maxDim = c.horizontal ? CONFIG.WIDTH : CONFIG.HEIGHT;
+        if (p.t < -30 || p.t > maxDim + 30) {
+          c.packets.splice(j, 1);
+          continue;
         }
-        star.twinklePhase += star.twinkleSpeed * dt;
-        const twinkle = 0.5 + Math.sin(star.twinklePhase) * 0.5;
-        const a = layer.alpha * twinkle;
-        gfx.fillStyle(0xffffff, a);
-        gfx.fillRect(star.x - star.size * 0.5, star.y - star.size * 0.5, star.size, star.size);
+        // Trail
+        gfx.lineStyle(1, CONFIG.GRID_HIGHLIGHT, 0.35);
+        gfx.beginPath();
+        if (c.horizontal) {
+          gfx.moveTo(p.t, c.pos);
+          gfx.lineTo(p.t - p.len * p.dir, c.pos);
+        } else {
+          gfx.moveTo(c.pos, p.t);
+          gfx.lineTo(c.pos, p.t - p.len * p.dir);
+        }
+        gfx.strokePath();
+        // Bright head
+        gfx.fillStyle(CONFIG.GRID_HIGHLIGHT, 0.7);
+        if (c.horizontal) {
+          gfx.fillRect(p.t - 2, c.pos - 1.5, 4, 3);
+        } else {
+          gfx.fillRect(c.pos - 1.5, p.t - 2, 3, 4);
+        }
       }
     }
-  }
 
-  // =============================================
-  //  NEBULA CLOUDS
-  // =============================================
-  _initNebulae() {
-    this._nebulae = [];
-    const colors = [0x4400aa, 0x220066, 0x660044, 0x002266, 0x003344];
-    for (let i = 0; i < 5; i++) {
-      this._nebulae.push({
-        x: Math.random() * CONFIG.WIDTH,
-        y: 80 + Math.random() * 300,
-        rx: 60 + Math.random() * 100,
-        ry: 30 + Math.random() * 60,
-        color: colors[i],
-        alpha: 0.04 + Math.random() * 0.03,
-        vx: (Math.random() - 0.5) * 6,
-        phase: Math.random() * Math.PI * 2,
-      });
-    }
-  }
-
-  _drawNebulae(gfx, dt) {
-    for (const n of this._nebulae) {
-      n.x += n.vx * dt;
-      n.phase += dt * 0.3;
-      if (n.x < -n.rx) n.x = CONFIG.WIDTH + n.rx;
-      if (n.x > CONFIG.WIDTH + n.rx) n.x = -n.rx;
-      const pulse = 1 + Math.sin(n.phase) * 0.15;
-      gfx.fillStyle(n.color, n.alpha * pulse);
-      gfx.fillEllipse(n.x, n.y, n.rx * 2 * pulse, n.ry * 2 * pulse);
-    }
-  }
-
-  // =============================================
-  //  SHOOTING STARS
-  // =============================================
-  _initShootingStars() {
-    this._shootingStars = [];
-    this._shootingStarTimer = 3 + Math.random() * 5;
-  }
-
-  _updateShootingStars(dt) {
-    this._shootingStarTimer -= dt;
-    if (this._shootingStarTimer <= 0) {
-      this._shootingStarTimer = 3 + Math.random() * 5;
-      this._shootingStars.push({
-        x: Math.random() * CONFIG.WIDTH,
-        y: 20 + Math.random() * 200,
-        vx: 300 + Math.random() * 400,
-        vy: 100 + Math.random() * 150,
-        life: 0,
-        maxLife: 300 + Math.random() * 400,
-        length: 20 + Math.random() * 40,
-      });
-    }
-    for (let i = this._shootingStars.length - 1; i >= 0; i--) {
-      const s = this._shootingStars[i];
-      s.life += dt * 1000;
-      s.x += s.vx * dt;
-      s.y += s.vy * dt;
-      if (s.life >= s.maxLife || s.x > CONFIG.WIDTH + 50 || s.y > CONFIG.HEIGHT) {
-        this._shootingStars.splice(i, 1);
-      }
-    }
-  }
-
-  _drawShootingStars(gfx) {
-    for (const s of this._shootingStars) {
-      const t = s.life / s.maxLife;
-      const alpha = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
-      const dir = Math.atan2(s.vy, s.vx);
-      const tailX = s.x - Math.cos(dir) * s.length;
-      const tailY = s.y - Math.sin(dir) * s.length;
-      gfx.lineStyle(2, 0xffffff, alpha * 0.9);
-      gfx.beginPath();
-      gfx.moveTo(s.x, s.y);
-      gfx.lineTo(tailX, tailY);
-      gfx.strokePath();
-      const farTailX = s.x - Math.cos(dir) * s.length * 2;
-      const farTailY = s.y - Math.sin(dir) * s.length * 2;
-      gfx.lineStyle(1, 0x8888ff, alpha * 0.3);
-      gfx.beginPath();
-      gfx.moveTo(tailX, tailY);
-      gfx.lineTo(farTailX, farTailY);
+    // Junction nodes — pulsing diamonds at intersections
+    for (const j of this._junctions) {
+      j.phase += dt * 2;
+      const pulse = 0.15 + Math.sin(j.phase) * 0.1;
+      gfx.fillStyle(CONFIG.GRID_HIGHLIGHT, pulse);
+      gfx.fillRect(j.x - 2, j.y - 2, 4, 4);
+      // Tiny diamond outline
+      gfx.lineStyle(1, CONFIG.GRID_HIGHLIGHT, pulse * 0.5);
+      this._drawDiamond(gfx, j.x, j.y, 5, 5, 0);
       gfx.strokePath();
     }
   }
 
   // =============================================
-  //  PERSPECTIVE GRID
+  //  SCAN BEAMS (wide horizontal sweep lines)
   // =============================================
-  _drawGrid(gfx, dt, gameState) {
-    this.gridOffset = (this.gridOffset + dt * 60) % 40;
+  _initScanBeams() {
+    this._scanBeams = [
+      { y: Math.random() * CONFIG.HEIGHT, speed: 25, width: 40 },
+      { y: Math.random() * CONFIG.HEIGHT, speed: 15, width: 60 },
+      { y: Math.random() * CONFIG.HEIGHT, speed: 35, width: 20 },
+    ];
+  }
+
+  _drawScanBeams(gfx, dt) {
+    for (const beam of this._scanBeams) {
+      beam.y += beam.speed * dt;
+      if (beam.y > CONFIG.HEIGHT + beam.width) beam.y = -beam.width;
+
+      // Gradient band — multiple thin lines fading outward
+      const steps = 6;
+      for (let i = 0; i < steps; i++) {
+        const offset = (i - steps / 2) * (beam.width / steps);
+        const falloff = 1 - Math.abs(i - steps / 2) / (steps / 2);
+        const a = falloff * falloff * 0.12;
+        gfx.lineStyle(beam.width / steps, CONFIG.GRID_HIGHLIGHT, a);
+        gfx.beginPath();
+        gfx.moveTo(0, beam.y + offset);
+        gfx.lineTo(CONFIG.WIDTH, beam.y + offset);
+        gfx.strokePath();
+      }
+
+      // Bright core line
+      gfx.lineStyle(1, CONFIG.GRID_HIGHLIGHT, 0.3);
+      gfx.beginPath();
+      gfx.moveTo(0, beam.y);
+      gfx.lineTo(CONFIG.WIDTH, beam.y);
+      gfx.strokePath();
+    }
+  }
+
+  // =============================================
+  //  HEX GRID (flat-top tessellation + pulsing highlights)
+  // =============================================
+  _drawHexGrid(gfx, dt, gameState) {
+    this.gridOffset = (this.gridOffset + dt * 25) % 60;
     const w = CONFIG.WIDTH;
     const h = CONFIG.HEIGHT;
-    const cx = CONFIG.CENTER_X;
-    const horizonY = GRID_HORIZON_Y;
+    const hexR = 24;
+    const hexW = hexR * 2;
+    const hexH = hexR * Math.sqrt(3);
+    const t = this._time;
 
-    let gridColor = CONFIG.GRID_COLOR;
-    let gridHighlight = CONFIG.GRID_HIGHLIGHT;
-    if (gameState) {
-      const t = gameState.elapsed || 0;
-      if (t > 120) {
-        gridColor = 0x501020;
-        gridHighlight = 0xa03060;
-      } else if (t > 60) {
-        gridColor = 0x3a1050;
-        gridHighlight = 0x7030a0;
+    // Zone-based grid tint
+    const gridColor = (gameState && gameState._zoneTint) || CONFIG.GRID_COLOR;
+
+    const cols = Math.ceil(w / (hexW * 0.75)) + 2;
+    const rows = Math.ceil(h / hexH) + 2;
+    const offsetY = this.gridOffset;
+    let hexIndex = 0;
+
+    for (let col = -1; col < cols; col++) {
+      for (let row = -1; row < rows; row++) {
+        const cx = col * hexW * 0.75;
+        const cy = row * hexH + (col % 2 === 0 ? 0 : hexH * 0.5) - offsetY;
+
+        if (cy < -hexR * 2 || cy > h + hexR * 2) continue;
+
+        hexIndex++;
+
+        // Every 7th hex gets a pulsing fill highlight
+        if (hexIndex % 7 === 0) {
+          const pulse = 0.03 + Math.sin(t * 1.5 + hexIndex * 0.3) * 0.02;
+          gfx.fillStyle(gridColor, pulse);
+          this._drawPolygon(gfx, cx, cy, 6, hexR, 0);
+          gfx.fillPath();
+        }
+
+        // Outline — every 4th hex brighter
+        const bright = hexIndex % 4 === 0;
+        const alpha = bright ? 0.22 : 0.12;
+
+        gfx.lineStyle(1, gridColor, alpha);
+        this._drawPolygon(gfx, cx, cy, 6, hexR, 0);
+        gfx.strokePath();
       }
     }
+  }
 
-    gfx.lineStyle(2, gridHighlight, 0.4);
+  // =============================================
+  //  VIGNETTE + TERMINAL FRAME
+  // =============================================
+  _drawTerminalFrame(gfx) {
+    const w = CONFIG.WIDTH;
+    const h = CONFIG.HEIGHT;
+
+    // Dark vignette corners — layered rects
+    const vigSize = 120;
+    for (let i = 0; i < 5; i++) {
+      const s = vigSize - i * 20;
+      const a = 0.15 - i * 0.025;
+      gfx.fillStyle(0x000000, a);
+      // Top-left
+      gfx.fillRect(0, 0, s, s);
+      // Top-right
+      gfx.fillRect(w - s, 0, s, s);
+      // Bottom-left
+      gfx.fillRect(0, h - s, s, s);
+      // Bottom-right
+      gfx.fillRect(w - s, h - s, s, s);
+    }
+
+    // Border frame — thin green lines
+    gfx.lineStyle(1, CONFIG.GRID_HIGHLIGHT, 0.25);
+    gfx.strokeRect(4, 4, w - 8, h - 8);
+    gfx.lineStyle(1, CONFIG.GRID_HIGHLIGHT, 0.1);
+    gfx.strokeRect(8, 8, w - 16, h - 16);
+
+    // Corner brackets
+    const bLen = 20;
+    gfx.lineStyle(2, CONFIG.GRID_HIGHLIGHT, 0.4);
+    // TL
     gfx.beginPath();
-    gfx.moveTo(0, horizonY);
-    gfx.lineTo(w, horizonY);
+    gfx.moveTo(4, 4 + bLen); gfx.lineTo(4, 4); gfx.lineTo(4 + bLen, 4);
     gfx.strokePath();
-
-    const vertCount = 16;
-    gfx.lineStyle(1, gridColor, 0.25);
-    for (let i = 0; i <= vertCount; i++) {
-      const bottomX = (i / vertCount) * w;
-      const topX = cx + (bottomX - cx) * 0.15;
-      gfx.beginPath();
-      gfx.moveTo(topX, horizonY);
-      gfx.lineTo(bottomX, h);
-      gfx.strokePath();
-    }
-
-    const lineCount = 14;
-    gfx.lineStyle(1, gridColor, 0.2);
-    for (let i = 1; i <= lineCount; i++) {
-      const t = i / lineCount;
-      const y = horizonY + (h - horizonY) * (t * t) + this.gridOffset * t;
-      if (y < horizonY || y > h) continue;
-      const alpha = 0.1 + t * 0.2;
-      gfx.lineStyle(1, gridColor, alpha);
-      gfx.beginPath();
-      gfx.moveTo(0, y);
-      gfx.lineTo(w, y);
-      gfx.strokePath();
-    }
-
-    gfx.lineStyle(1, gridHighlight, 0.3);
+    // TR
     gfx.beginPath();
-    gfx.moveTo(cx, horizonY);
-    gfx.lineTo(cx, h);
+    gfx.moveTo(w - 4 - bLen, 4); gfx.lineTo(w - 4, 4); gfx.lineTo(w - 4, 4 + bLen);
+    gfx.strokePath();
+    // BL
+    gfx.beginPath();
+    gfx.moveTo(4, h - 4 - bLen); gfx.lineTo(4, h - 4); gfx.lineTo(4 + bLen, h - 4);
+    gfx.strokePath();
+    // BR
+    gfx.beginPath();
+    gfx.moveTo(w - 4 - bLen, h - 4); gfx.lineTo(w - 4, h - 4); gfx.lineTo(w - 4, h - 4 - bLen);
     gfx.strokePath();
   }
 
   // =============================================
-  //  GROUND + HEAT SHIMMER
+  //  DATA BOUNDARY (elaborate ground line)
   // =============================================
-  _drawGround(gfx) {
+  _drawDataBoundary(gfx) {
     const gy = CONFIG.GROUND_Y + CONFIG.PLAYER_RADIUS;
     const w = CONFIG.WIDTH;
-    const groundH = CONFIG.HEIGHT - gy;
+    const t = this._time;
 
-    for (let i = 0; i < 8; i++) {
-      const t = i / 8;
-      const stepY = gy + groundH * t;
-      const stepH = groundH / 8;
-      const alpha = 0.25 - t * 0.025;
-      gfx.fillStyle(CONFIG.GRID_COLOR, alpha);
-      gfx.fillRect(0, stepY, w, stepH);
+    // Dark fill below ground with gradient bands
+    for (let i = 0; i < 6; i++) {
+      const bandY = gy + i * 15;
+      const bandH = 15;
+      const a = 0.4 - i * 0.06;
+      gfx.fillStyle(0x050a05, a);
+      gfx.fillRect(0, bandY, w, bandH);
     }
 
-    gfx.lineStyle(1, CONFIG.PLAYER_IMPACT, 0.06);
-    for (let y = gy + 4; y < CONFIG.HEIGHT; y += 4) {
-      gfx.beginPath();
-      gfx.moveTo(0, y);
-      gfx.lineTo(w, y);
-      gfx.strokePath();
-    }
-
-    for (let i = 0; i < 3; i++) {
-      const baseY = gy - 8 - i * 6;
-      const shimmerAlpha = 0.03 - i * 0.008;
-      gfx.lineStyle(1, CONFIG.PLAYER_IMPACT, Math.max(0.01, shimmerAlpha));
-      gfx.beginPath();
-      for (let sx = 0; sx < w; sx += 4) {
-        const wave = Math.sin((sx * 0.02) + this._time * 3 + i * 2) * (2 + i);
-        if (sx === 0) gfx.moveTo(sx, baseY + wave);
-        else gfx.lineTo(sx, baseY + wave);
+    // Scrolling data noise below ground — small dots
+    gfx.fillStyle(CONFIG.GRID_COLOR, 0.15);
+    const noiseOffset = (t * 40) % 8;
+    for (let x = noiseOffset; x < w; x += 8) {
+      for (let y = gy + 4; y < CONFIG.HEIGHT; y += 8) {
+        if (((x * 7 + y * 13) | 0) % 5 === 0) {
+          gfx.fillRect(x, y, 2, 2);
+        }
       }
+    }
+
+    // Glow line above ground
+    gfx.lineStyle(8, CONFIG.PLAYER_IMPACT, 0.08);
+    gfx.beginPath();
+    gfx.moveTo(0, gy);
+    gfx.lineTo(w, gy);
+    gfx.strokePath();
+
+    // Main dashed line (8px on, 4px gap)
+    gfx.lineStyle(2, CONFIG.PLAYER_IMPACT, 0.9);
+    for (let x = 0; x < w; x += 12) {
+      gfx.beginPath();
+      gfx.moveTo(x, gy);
+      gfx.lineTo(Math.min(x + 8, w), gy);
       gfx.strokePath();
     }
 
-    gfx.lineStyle(6, CONFIG.PLAYER_IMPACT, 0.15);
-    gfx.beginPath();
-    gfx.moveTo(0, gy);
-    gfx.lineTo(w, gy);
-    gfx.strokePath();
+    // Tick marks every 40px — tall ones every 120px
+    for (let x = 0; x < w; x += 40) {
+      const tall = x % 120 === 0;
+      const tickH = tall ? 6 : 3;
+      const tickA = tall ? 0.5 : 0.25;
+      gfx.lineStyle(1, CONFIG.PLAYER_IMPACT, tickA);
+      gfx.beginPath();
+      gfx.moveTo(x, gy - tickH);
+      gfx.lineTo(x, gy + tickH);
+      gfx.strokePath();
+    }
 
-    gfx.lineStyle(2, CONFIG.PLAYER_IMPACT, 0.8);
-    gfx.beginPath();
-    gfx.moveTo(0, gy);
-    gfx.lineTo(w, gy);
-    gfx.strokePath();
+    // Scrolling address markers below line
+    gfx.fillStyle(CONFIG.GRID_COLOR, 0.2);
+    const addrOffset = (t * 20) % 120;
+    for (let x = -addrOffset; x < w; x += 120) {
+      // Small bracket pair to suggest hex addresses
+      gfx.fillRect(x, gy + 8, 2, 4);
+      gfx.fillRect(x + 16, gy + 8, 2, 4);
+      // Dots between
+      for (let d = 0; d < 3; d++) {
+        gfx.fillRect(x + 4 + d * 4, gy + 10, 2, 1);
+      }
+    }
   }
 
   // =============================================
@@ -372,13 +444,11 @@ export class EntityRenderer {
   _drawPlayerTrail(gfx) {
     for (const ghost of this._playerTrail) {
       const s = ghost.size;
-      // Simplified falling chevron ghost
-      gfx.fillStyle(ghost.color, ghost.alpha * 0.3);
-      this._drawChevron(gfx, ghost.x, ghost.y, s * 1.6, s * 2.2, s * 0.6, 0);
-      gfx.fillPath();
-      gfx.lineStyle(1, ghost.color, ghost.alpha * 0.25);
-      this._drawChevron(gfx, ghost.x, ghost.y, s * 1.6, s * 2.2, s * 0.6, 0);
-      gfx.strokePath();
+      // Ghosted square afterimage
+      gfx.fillStyle(ghost.color, ghost.alpha * 0.25);
+      gfx.fillRect(ghost.x - s, ghost.y - s, s * 2, s * 2);
+      gfx.lineStyle(1, ghost.color, ghost.alpha * 0.2);
+      gfx.strokeRect(ghost.x - s, ghost.y - s, s * 2, s * 2);
     }
   }
 
@@ -389,13 +459,13 @@ export class EntityRenderer {
     glowGfx.clear();
 
     const drawCircularGlow = (x, y, color, baseRadius) => {
-      glowGfx.fillStyle(color, 0.03);
+      glowGfx.fillStyle(color, 0.02);
       glowGfx.fillCircle(x, y, baseRadius * 4);
-      glowGfx.fillStyle(color, 0.06);
+      glowGfx.fillStyle(color, 0.04);
       glowGfx.fillCircle(x, y, baseRadius * 3);
-      glowGfx.fillStyle(color, 0.10);
+      glowGfx.fillStyle(color, 0.07);
       glowGfx.fillCircle(x, y, baseRadius * 2);
-      glowGfx.fillStyle(color, 0.15);
+      glowGfx.fillStyle(color, 0.10);
       glowGfx.fillCircle(x, y, baseRadius * 1.2);
     };
 
@@ -404,26 +474,23 @@ export class EntityRenderer {
       const color = player.getColor();
       const r = CONFIG.PLAYER_RADIUS * 1.5;
       if (player.mode === 'falling') {
-        // Vertically stretched during fall
         for (let layer = 3; layer >= 0; layer--) {
           const scale = 4 - layer;
-          const a = 0.03 + layer * 0.04;
+          const a = 0.02 + layer * 0.03;
           glowGfx.fillStyle(color, a);
           glowGfx.fillEllipse(player.x, player.y, r * scale * 1.4, r * scale * 2.2);
         }
       } else if (player.mode === 'flight') {
-        // Upward stretched during flight
         for (let layer = 3; layer >= 0; layer--) {
           const scale = 4 - layer;
-          const a = 0.03 + layer * 0.04;
+          const a = 0.02 + layer * 0.03;
           glowGfx.fillStyle(color, a);
           glowGfx.fillEllipse(player.x, player.y - r * 0.3, r * scale * 1.6, r * scale * 2.0);
         }
       } else {
-        // Wide on ground
         for (let layer = 3; layer >= 0; layer--) {
           const scale = 4 - layer;
-          const a = 0.03 + layer * 0.04;
+          const a = 0.02 + layer * 0.03;
           glowGfx.fillStyle(color, a);
           glowGfx.fillEllipse(player.x, player.y, r * scale * 2.0, r * scale * 1.2);
         }
@@ -514,12 +581,10 @@ export class EntityRenderer {
     gfx.clear();
     this._time += dt;
     this._updatePlayerTrail(player, dt);
-    this._updateShootingStars(dt);
 
-    this._drawStarfield(gfx, dt);
-    this._drawNebulae(gfx, dt);
-    this._drawShootingStars(gfx);
-    this._drawGrid(gfx, dt, gameState);
+    this._drawCircuitTraces(gfx, dt);
+    this._drawScanBeams(gfx, dt);
+    this._drawHexGrid(gfx, dt, gameState);
     this._drawPlayerTrail(gfx);
 
     entityManager.xpOrbs.forEach(o => {
@@ -562,11 +627,12 @@ export class EntityRenderer {
 
     if (player.alive) this._drawPlayer(gfx, player);
 
-    this._drawGround(gfx);
+    this._drawDataBoundary(gfx);
+    this._drawTerminalFrame(gfx);
   }
 
   // =============================================
-  //  PLAYER — "Vector Interceptor"
+  //  PLAYER — "Terminal Cursor"
   // =============================================
   _drawPlayer(gfx, player) {
     if (player.invulnTimer > 0 && Math.floor(player.invulnTimer / 100) % 2 === 0) return;
@@ -577,198 +643,192 @@ export class EntityRenderer {
     const color = player.getColor();
     const t = this._time;
 
-    // --- Mode-dependent chevron dimensions ---
-    let wingSpan, height, taperBack;
-    if (player.mode === 'flight') {
-      wingSpan = s * 1.4;
-      height = s * 2.6;
-      taperBack = s * 0.8;
-    } else if (player.mode === 'falling') {
-      wingSpan = s * 1.8;
-      height = s * 2.0;
-      taperBack = s * 0.5;
-    } else {
-      // impact — squat wide wedge
-      wingSpan = s * 2.4;
-      height = s * 1.6;
-      taperBack = s * 0.4;
+    // --- Outer scanning square (rotates slowly) ---
+    const scanRot = t * 0.8;
+    const scanS = s * 2.2;
+    gfx.lineStyle(1, color, 0.2);
+    gfx.save && gfx.save();
+    // Draw rotated square manually
+    for (let i = 0; i < 4; i++) {
+      const a1 = scanRot + (HALF_PI * i);
+      const a2 = scanRot + (HALF_PI * (i + 1));
+      gfx.beginPath();
+      gfx.moveTo(x + Math.cos(a1) * scanS, y + Math.sin(a1) * scanS);
+      gfx.lineTo(x + Math.cos(a2) * scanS, y + Math.sin(a2) * scanS);
+      gfx.strokePath();
     }
 
-    // --- Outer counter-rotating octagon wireframe ring ---
-    const ringR = s * 2.0;
-    const ringRot = t * 0.5;
-    gfx.lineStyle(1, color, 0.15);
-    this._drawPolygon(gfx, x, y, 8, ringR, ringRot);
-    gfx.strokePath();
-
-    // --- Shield indicator (if active) ---
+    // --- Shield indicator ---
     if (player.shieldActive) {
       const pulse = Math.sin(t * 6.5) * 0.15 + 0.35;
-      gfx.lineStyle(2, 0x00ff88, pulse);
-      gfx.strokeCircle(x, y, s * 2.2);
+      gfx.lineStyle(2, 0x33aa66, pulse);
+      gfx.strokeRect(x - s * 2.5, y - s * 2.5, s * 5, s * 5);
     }
 
-    // --- Chevron body (fill + stroke) ---
-    gfx.fillStyle(color, 0.6);
-    this._drawChevron(gfx, x, y, wingSpan, height, taperBack, 0);
-    gfx.fillPath();
-    gfx.lineStyle(2, color, 1);
-    this._drawChevron(gfx, x, y, wingSpan, height, taperBack, 0);
-    gfx.strokePath();
-
-    // --- Inner panel lines (structural detail) ---
-    gfx.lineStyle(1, 0xffffff, 0.2);
-    // Center spine
-    gfx.beginPath();
-    gfx.moveTo(x, y - height / 2 + 2);
-    gfx.lineTo(x, y + height / 2 - taperBack);
-    gfx.strokePath();
-    // Wing struts
-    gfx.beginPath();
-    gfx.moveTo(x, y);
-    gfx.lineTo(x - wingSpan * 0.35, y + height * 0.3);
-    gfx.moveTo(x, y);
-    gfx.lineTo(x + wingSpan * 0.35, y + height * 0.3);
-    gfx.strokePath();
-
-    // --- Pulsing white diamond core ---
-    const corePulse = 0.5 + Math.sin(t * 8) * 0.3;
-    const coreR = 3;
-    gfx.fillStyle(0xffffff, corePulse);
-    this._drawDiamond(gfx, x, y, coreR, coreR * 0.7, 0);
-    gfx.fillPath();
-
-    // --- Mode-specific details ---
+    // --- Main body: mode-dependent shape ---
     if (player.mode === 'flight') {
-      // Thruster jets — 3 flickering exhaust lines below
-      const exhaustFlicker = Math.sin(t * 20) * 0.3 + 0.6;
-      for (let i = 0; i < 3; i++) {
-        const exLen = 8 + Math.random() * 10;
-        const exX = x - 4 + i * 4;
-        const exAlpha = exhaustFlicker * (0.4 + Math.random() * 0.3);
-        gfx.lineStyle(1, CONFIG.PLAYER_FLIGHT, exAlpha);
-        gfx.beginPath();
-        gfx.moveTo(exX, y + height / 2 - taperBack + 2);
-        gfx.lineTo(exX + (Math.random() - 0.5) * 4, y + height / 2 - taperBack + 2 + exLen);
-        gfx.strokePath();
-      }
-      // Upward indicator chevron
-      gfx.lineStyle(1, 0xffffff, 0.5);
+      // FLIGHT: Upward-pointing arrow/caret [ ^ ] with data lines
+      const hw = s * 1.2;
+      const hh = s * 1.8;
+
+      // Filled arrow body
+      gfx.fillStyle(color, 0.45);
       gfx.beginPath();
-      gfx.moveTo(x, y - height / 2 - 4);
-      gfx.lineTo(x - 4, y - height / 2 + 1);
-      gfx.moveTo(x, y - height / 2 - 4);
-      gfx.lineTo(x + 4, y - height / 2 + 1);
+      gfx.moveTo(x, y - hh);           // tip
+      gfx.lineTo(x + hw, y + hh * 0.3); // right
+      gfx.lineTo(x + hw * 0.3, y);      // right notch
+      gfx.lineTo(x - hw * 0.3, y);      // left notch
+      gfx.lineTo(x - hw, y + hh * 0.3); // left
+      gfx.closePath();
+      gfx.fillPath();
+
+      // Outline
+      gfx.lineStyle(2, color, 0.9);
+      gfx.beginPath();
+      gfx.moveTo(x, y - hh);
+      gfx.lineTo(x + hw, y + hh * 0.3);
+      gfx.lineTo(x + hw * 0.3, y);
+      gfx.lineTo(x - hw * 0.3, y);
+      gfx.lineTo(x - hw, y + hh * 0.3);
+      gfx.closePath();
       gfx.strokePath();
-    } else if (player.mode === 'falling') {
-      // Speed streaks — lines streaming upward from wings
-      const streakAlpha = 0.3 + Math.random() * 0.2;
-      gfx.lineStyle(1, color, streakAlpha);
-      for (let i = 0; i < 4; i++) {
-        const sx = x + (i - 1.5) * 5;
-        const sLen = 6 + Math.random() * 8;
+
+      // Exhaust data streams below
+      const flicker = Math.sin(t * 20) * 0.3 + 0.6;
+      for (let i = 0; i < 5; i++) {
+        const exLen = 6 + Math.random() * 14;
+        const exX = x - 6 + i * 3;
+        gfx.lineStyle(1, color, flicker * (0.3 + Math.random() * 0.4));
         gfx.beginPath();
-        gfx.moveTo(sx, y - height / 2);
-        gfx.lineTo(sx + (Math.random() - 0.5) * 2, y - height / 2 - sLen);
+        gfx.moveTo(exX, y + 2);
+        gfx.lineTo(exX + (Math.random() - 0.5) * 3, y + 2 + exLen);
         gfx.strokePath();
       }
-    } else {
-      // Impact — ground contact arcs
-      gfx.lineStyle(1, color, 0.4);
+
+    } else if (player.mode === 'falling') {
+      // FALLING: Downward arrow with speed glitch lines
+      const hw = s * 1.4;
+      const hh = s * 1.6;
+
+      gfx.fillStyle(color, 0.5);
       gfx.beginPath();
-      const arcY = y + height / 2 - taperBack + 2;
-      for (let angle = -0.8; angle <= 0.8; angle += 0.1) {
-        const arcX = x + Math.sin(angle) * wingSpan * 0.7;
-        const arcYy = arcY + Math.cos(angle) * 3;
-        if (angle === -0.8) gfx.moveTo(arcX, arcYy);
-        else gfx.lineTo(arcX, arcYy);
+      gfx.moveTo(x, y + hh);             // tip (pointing down)
+      gfx.lineTo(x + hw, y - hh * 0.4);
+      gfx.lineTo(x + hw * 0.25, y - hh * 0.1);
+      gfx.lineTo(x - hw * 0.25, y - hh * 0.1);
+      gfx.lineTo(x - hw, y - hh * 0.4);
+      gfx.closePath();
+      gfx.fillPath();
+
+      gfx.lineStyle(2, color, 0.9);
+      gfx.beginPath();
+      gfx.moveTo(x, y + hh);
+      gfx.lineTo(x + hw, y - hh * 0.4);
+      gfx.lineTo(x + hw * 0.25, y - hh * 0.1);
+      gfx.lineTo(x - hw * 0.25, y - hh * 0.1);
+      gfx.lineTo(x - hw, y - hh * 0.4);
+      gfx.closePath();
+      gfx.strokePath();
+
+      // Glitch speed lines streaming up
+      for (let i = 0; i < 6; i++) {
+        const sx = x + (i - 2.5) * 5;
+        const sLen = 8 + Math.random() * 12;
+        gfx.lineStyle(1, color, 0.3 + Math.random() * 0.3);
+        gfx.beginPath();
+        gfx.moveTo(sx, y - hh * 0.4);
+        gfx.lineTo(sx + (Math.random() - 0.5) * 4, y - hh * 0.4 - sLen);
+        gfx.strokePath();
       }
+
+    } else {
+      // IMPACT: Flat wide bracket shape [ ═══ ] grounded
+      const hw = s * 2.0;
+      const hh = s * 0.8;
+
+      // Filled body
+      gfx.fillStyle(color, 0.5);
+      gfx.fillRect(x - hw, y - hh, hw * 2, hh * 2);
+      gfx.lineStyle(2, color, 0.9);
+      gfx.strokeRect(x - hw, y - hh, hw * 2, hh * 2);
+
+      // Internal data lines
+      gfx.lineStyle(1, color, 0.3);
+      gfx.beginPath();
+      gfx.moveTo(x - hw + 3, y);
+      gfx.lineTo(x + hw - 3, y);
+      gfx.strokePath();
+
+      // Corner brackets (outer)
+      const bk = 6;
+      gfx.lineStyle(2, color, 0.6);
+      // TL
+      gfx.beginPath();
+      gfx.moveTo(x - hw - 3, y - hh - 3); gfx.lineTo(x - hw - 3, y - hh + bk);
+      gfx.moveTo(x - hw - 3, y - hh - 3); gfx.lineTo(x - hw + bk, y - hh - 3);
+      gfx.strokePath();
+      // TR
+      gfx.beginPath();
+      gfx.moveTo(x + hw + 3, y - hh - 3); gfx.lineTo(x + hw + 3, y - hh + bk);
+      gfx.moveTo(x + hw + 3, y - hh - 3); gfx.lineTo(x + hw - bk, y - hh - 3);
+      gfx.strokePath();
+      // BL
+      gfx.beginPath();
+      gfx.moveTo(x - hw - 3, y + hh + 3); gfx.lineTo(x - hw - 3, y + hh - bk);
+      gfx.moveTo(x - hw - 3, y + hh + 3); gfx.lineTo(x - hw + bk, y + hh + 3);
+      gfx.strokePath();
+      // BR
+      gfx.beginPath();
+      gfx.moveTo(x + hw + 3, y + hh + 3); gfx.lineTo(x + hw + 3, y + hh - bk);
+      gfx.moveTo(x + hw + 3, y + hh + 3); gfx.lineTo(x + hw - bk, y + hh + 3);
       gfx.strokePath();
     }
+
+    // --- Blinking cursor core ---
+    const blink = Math.sin(t * 6) > 0 ? 0.9 : 0.3;
+    gfx.fillStyle(0xffffff, blink);
+    gfx.fillRect(x - 2, y - 2, 4, 4);
 
     // --- Flight meter bar ---
     const meterW = 30;
     const meterH = 3;
     const meterX = x - meterW / 2;
-    const meterY = player.mode === 'impact' ? y - height / 2 - 10 : y + height / 2 + 5;
+    const meterY = player.mode === 'impact' ? y - s * 1.5 - 8 : y + s * 1.5 + 4;
     const fill = player.flightMeter / CONFIG.FLIGHT_METER_MAX;
-    gfx.fillStyle(0x333333, 0.6);
+    gfx.fillStyle(0x1a1a1a, 0.6);
     gfx.fillRect(meterX, meterY, meterW, meterH);
     gfx.fillStyle(CONFIG.PLAYER_FLIGHT, 0.8);
     gfx.fillRect(meterX, meterY, meterW * fill, meterH);
   }
 
   // =============================================
-  //  ENERGY BURST — "Photon Bolt"
+  //  ENERGY BURST — "Data Packet"
   // =============================================
   _drawBurst(gfx, burst) {
     const bx = lerp(burst.prevX, burst.x, 0.5);
     const by = lerp(burst.prevY, burst.y, 0.5);
     const r = burst.radius;
-    const t = this._time;
 
-    // Motion trail line from prev position
-    gfx.lineStyle(1, CONFIG.BURST_COLOR, 0.25);
+    // Trail line
+    gfx.lineStyle(2, CONFIG.BURST_COLOR, 0.4);
     gfx.beginPath();
     gfx.moveTo(burst.prevX, burst.prevY);
     gfx.lineTo(bx, by);
     gfx.strokePath();
 
-    // Elongated diamond body (tall narrow — stretched in travel direction)
-    const dw = r * 0.8;
-    const dh = r * 2.0;
-    gfx.fillStyle(CONFIG.BURST_COLOR, 0.85);
-    gfx.beginPath();
-    gfx.moveTo(bx, by - dh);        // top (leading edge)
-    gfx.lineTo(bx + dw, by);        // right
-    gfx.lineTo(bx, by + dh * 0.6);  // bottom (shorter trailing)
-    gfx.lineTo(bx - dw, by);        // left
-    gfx.closePath();
-    gfx.fillPath();
+    // Bright rectangular data packet
+    gfx.fillStyle(CONFIG.BURST_COLOR, 0.8);
+    gfx.fillRect(bx - r * 0.6, by - r * 1.5, r * 1.2, r * 3);
     gfx.lineStyle(1, CONFIG.BURST_COLOR, 1);
-    gfx.beginPath();
-    gfx.moveTo(bx, by - dh);
-    gfx.lineTo(bx + dw, by);
-    gfx.lineTo(bx, by + dh * 0.6);
-    gfx.lineTo(bx - dw, by);
-    gfx.closePath();
-    gfx.strokePath();
+    gfx.strokeRect(bx - r * 0.6, by - r * 1.5, r * 1.2, r * 3);
 
-    // Inner cross lines
-    gfx.lineStyle(1, 0xffffff, 0.3);
-    gfx.beginPath();
-    gfx.moveTo(bx, by - dh * 0.5);
-    gfx.lineTo(bx, by + dh * 0.3);
-    gfx.moveTo(bx - dw * 0.4, by);
-    gfx.lineTo(bx + dw * 0.4, by);
-    gfx.strokePath();
-
-    // White core
-    gfx.fillStyle(0xffffff, 0.8);
-    gfx.fillRect(bx - 1, by - 1, 2, 2);
-
-    // Rotating 4-point sparkle
-    const sparkRot = t * 12;
-    const sparkR = r * 0.5;
-    gfx.lineStyle(1, 0xffffff, 0.5);
-    gfx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      const angle = sparkRot + (HALF_PI * i);
-      gfx.moveTo(bx, by);
-      gfx.lineTo(bx + Math.cos(angle) * sparkR, by + Math.sin(angle) * sparkR);
-    }
-    gfx.strokePath();
-
-    // Leading edge flicker
-    if (Math.random() > 0.4) {
-      const flickR = 1 + Math.random() * 2;
-      gfx.fillStyle(0xffffff, 0.4 + Math.random() * 0.3);
-      gfx.fillRect(bx - flickR / 2, by - dh - flickR / 2, flickR, flickR);
-    }
+    // White center line
+    gfx.fillStyle(0xffffff, 0.7);
+    gfx.fillRect(bx - 1, by - r, 2, r * 2);
   }
 
   // =============================================
-  //  DATA BLOCKER — "Barrier Fortress"
+  //  DATA BLOCKER — "Firewall Barrier"
   // =============================================
   _drawBlocker(gfx, blocker) {
     const x = blocker.x;
@@ -778,113 +838,62 @@ export class EntityRenderer {
     const drawColor = blocker.hitFlashTimer > 0 ? 0xffffff : CONFIG.BLOCKER_COLOR;
     const t = this._time;
 
-    // --- Faint outer rotating wireframe hexagon ---
-    const outerR = Math.max(hw, hh) * 1.3;
-    gfx.lineStyle(1, drawColor, 0.12);
-    this._drawPolygon(gfx, x, y, 6, outerR, t * 0.4);
+    // --- Solid rectangular body (terminal window) ---
+    gfx.fillStyle(drawColor, 0.15);
+    gfx.fillRect(x - hw, y - hh, hw * 2, hh * 2);
+
+    // Double border (inner bright, outer dim)
+    gfx.lineStyle(2, drawColor, 0.9);
+    gfx.strokeRect(x - hw, y - hh, hw * 2, hh * 2);
+    gfx.lineStyle(1, drawColor, 0.3);
+    gfx.strokeRect(x - hw - 3, y - hh - 3, hw * 2 + 6, hh * 2 + 6);
+
+    // --- Title bar line across top ---
+    gfx.lineStyle(1, drawColor, 0.6);
+    gfx.beginPath();
+    gfx.moveTo(x - hw + 1, y - hh + 5);
+    gfx.lineTo(x + hw - 1, y - hh + 5);
     gfx.strokePath();
 
-    // --- Elongated hexagon body (main shape) ---
-    // Custom hex: wider than tall
-    gfx.fillStyle(drawColor, 0.6);
+    // X close button in top-right
+    gfx.lineStyle(1, 0xffffff, 0.5);
     gfx.beginPath();
-    gfx.moveTo(x - hw, y);                    // left
-    gfx.lineTo(x - hw + hh, y - hh);          // top-left
-    gfx.lineTo(x + hw - hh, y - hh);          // top-right
-    gfx.lineTo(x + hw, y);                    // right
-    gfx.lineTo(x + hw - hh, y + hh);          // bottom-right
-    gfx.lineTo(x - hw + hh, y + hh);          // bottom-left
-    gfx.closePath();
-    gfx.fillPath();
-    gfx.lineStyle(2, drawColor, 1);
-    gfx.beginPath();
-    gfx.moveTo(x - hw, y);
-    gfx.lineTo(x - hw + hh, y - hh);
-    gfx.lineTo(x + hw - hh, y - hh);
-    gfx.lineTo(x + hw, y);
-    gfx.lineTo(x + hw - hh, y + hh);
-    gfx.lineTo(x - hw + hh, y + hh);
-    gfx.closePath();
+    gfx.moveTo(x + hw - 6, y - hh + 1); gfx.lineTo(x + hw - 2, y - hh + 4);
+    gfx.moveTo(x + hw - 2, y - hh + 1); gfx.lineTo(x + hw - 6, y - hh + 4);
     gfx.strokePath();
 
-    // --- Internal grid dividers ---
-    gfx.lineStyle(1, drawColor, 0.2);
-    const divCount = 4;
-    for (let i = 1; i < divCount; i++) {
-      const divX = x - hw + hh + (blocker.width - hh * 2) * (i / divCount);
-      gfx.beginPath();
-      gfx.moveTo(divX, y - hh + 1);
-      gfx.lineTo(divX, y + hh - 1);
-      gfx.strokePath();
+    // --- Scrolling binary data inside ---
+    const scrollOff = (t * 50) % 10;
+    gfx.fillStyle(drawColor, 0.4);
+    for (let dx = x - hw + 3 + scrollOff; dx < x + hw - 3; dx += 10) {
+      const dotY1 = y - hh + 7;
+      const dotY2 = y;
+      gfx.fillRect(dx, dotY1, 3, 1);
+      gfx.fillRect(dx + 4, dotY2, 2, 1);
     }
 
-    // --- Scrolling data dots ---
-    const dotOffset = (t * 30) % 12;
-    gfx.fillStyle(drawColor, 0.3);
-    for (let dx = x - hw + hh + dotOffset; dx < x + hw - hh; dx += 12) {
-      for (let row = -1; row <= 1; row += 2) {
-        const dotY = y + row * (hh * 0.4);
-        gfx.fillRect(dx - 1, dotY - 1, 2, 2);
-      }
-    }
-
-    // --- Diamond-shaped HP pips ---
-    const pipSpacing = 10;
+    // --- HP pips as small squares ---
+    const pipSpacing = 8;
     const pipStartX = x - ((blocker.hp - 1) * pipSpacing) / 2;
     for (let i = 0; i < blocker.hp; i++) {
       const px = pipStartX + i * pipSpacing;
       gfx.fillStyle(0xffffff, 0.9);
-      this._drawDiamond(gfx, px, y, 3, 2, 0);
-      gfx.fillPath();
+      gfx.fillRect(px - 2, y + hh - 4, 4, 3);
     }
 
-    // --- Corner bracket accents ---
-    const bracketLen = 5;
-    gfx.lineStyle(1, drawColor, 0.5);
-    // top-left
-    gfx.beginPath();
-    gfx.moveTo(x - hw + hh, y - hh);
-    gfx.lineTo(x - hw + hh - bracketLen, y - hh);
-    gfx.moveTo(x - hw + hh, y - hh);
-    gfx.lineTo(x - hw + hh, y - hh + bracketLen);
-    gfx.strokePath();
-    // top-right
-    gfx.beginPath();
-    gfx.moveTo(x + hw - hh, y - hh);
-    gfx.lineTo(x + hw - hh + bracketLen, y - hh);
-    gfx.moveTo(x + hw - hh, y - hh);
-    gfx.lineTo(x + hw - hh, y - hh + bracketLen);
-    gfx.strokePath();
-    // bottom-left
-    gfx.beginPath();
-    gfx.moveTo(x - hw + hh, y + hh);
-    gfx.lineTo(x - hw + hh - bracketLen, y + hh);
-    gfx.moveTo(x - hw + hh, y + hh);
-    gfx.lineTo(x - hw + hh, y + hh - bracketLen);
-    gfx.strokePath();
-    // bottom-right
-    gfx.beginPath();
-    gfx.moveTo(x + hw - hh, y + hh);
-    gfx.lineTo(x + hw - hh + bracketLen, y + hh);
-    gfx.moveTo(x + hw - hh, y + hh);
-    gfx.lineTo(x + hw - hh, y + hh - bracketLen);
-    gfx.strokePath();
-
-    // --- Pulsing edge segments ---
-    const segCount = 6;
-    for (let i = 0; i < segCount; i++) {
-      const segPhase = Math.sin(t * 3 + i * 1.2) * 0.3 + 0.3;
-      const segX = x - hw + hh + (blocker.width - hh * 2) * (i / segCount);
-      gfx.lineStyle(2, drawColor, segPhase);
+    // --- Warning stripe dashes along bottom edge ---
+    const stripePhase = (t * 40) % 16;
+    gfx.lineStyle(1, drawColor, 0.3);
+    for (let sx = x - hw + stripePhase; sx < x + hw; sx += 16) {
       gfx.beginPath();
-      gfx.moveTo(segX, y - hh);
-      gfx.lineTo(segX + (blocker.width - hh * 2) / segCount * 0.5, y - hh);
+      gfx.moveTo(sx, y + hh);
+      gfx.lineTo(Math.min(sx + 8, x + hw), y + hh);
       gfx.strokePath();
     }
   }
 
   // =============================================
-  //  CHASER BOT — "Hunter Scarab"
+  //  CHASER BOT — "Malware Process"
   // =============================================
   _drawChaser(gfx, chaser, player) {
     const x = chaser.x;
@@ -893,130 +902,70 @@ export class EntityRenderer {
     const drawColor = chaser.hitFlashTimer > 0 ? 0xffffff : CONFIG.CHASER_COLOR;
     const t = this._time;
 
-    // --- Scanning detection arc toward player ---
-    if (player && player.alive) {
+    // --- Danger scan cone toward player ---
+    if (player && player.alive && player.mode !== 'flight') {
       const dx = player.x - x;
       const dy = player.y - y;
-      const angleToPlayer = Math.atan2(dy, dx);
-      const scanArc = 0.5;  // radians width
-      const scanR = r * 4;
-      const scanSweep = Math.sin(t * 2.5) * 0.4;
-      gfx.lineStyle(1, drawColor, 0.08);
+      const angle = Math.atan2(dy, dx);
+      const scanR = r * 3.5;
+      gfx.fillStyle(drawColor, 0.06);
       gfx.beginPath();
       gfx.moveTo(x, y);
-      for (let a = -scanArc; a <= scanArc; a += 0.1) {
-        const sa = angleToPlayer + a + scanSweep;
-        gfx.lineTo(x + Math.cos(sa) * scanR, y + Math.sin(sa) * scanR);
+      for (let a = -0.4; a <= 0.4; a += 0.08) {
+        gfx.lineTo(x + Math.cos(angle + a) * scanR, y + Math.sin(angle + a) * scanR);
       }
-      gfx.lineTo(x, y);
-      gfx.strokePath();
+      gfx.closePath();
+      gfx.fillPath();
     }
 
-    // --- Inverted pentagon body (wider top, tapered bottom) ---
-    gfx.fillStyle(drawColor, 0.75);
+    // --- Warning triangle body ---
+    const triH = r * 2.2;
+    const triW = r * 1.6;
+    gfx.fillStyle(drawColor, 0.5);
     gfx.beginPath();
-    gfx.moveTo(x - r * 1.1, y - r * 0.5);   // top-left (wide)
-    gfx.lineTo(x + r * 1.1, y - r * 0.5);   // top-right (wide)
-    gfx.lineTo(x + r * 0.8, y + r * 0.4);   // mid-right
-    gfx.lineTo(x, y + r * 1.0);              // bottom center (tapered)
-    gfx.lineTo(x - r * 0.8, y + r * 0.4);   // mid-left
+    gfx.moveTo(x, y - triH * 0.5);        // top
+    gfx.lineTo(x + triW, y + triH * 0.5);  // bottom-right
+    gfx.lineTo(x - triW, y + triH * 0.5);  // bottom-left
     gfx.closePath();
     gfx.fillPath();
-    gfx.lineStyle(2, drawColor, 1);
+    gfx.lineStyle(2, drawColor, 0.9);
     gfx.beginPath();
-    gfx.moveTo(x - r * 1.1, y - r * 0.5);
-    gfx.lineTo(x + r * 1.1, y - r * 0.5);
-    gfx.lineTo(x + r * 0.8, y + r * 0.4);
-    gfx.lineTo(x, y + r * 1.0);
-    gfx.lineTo(x - r * 0.8, y + r * 0.4);
+    gfx.moveTo(x, y - triH * 0.5);
+    gfx.lineTo(x + triW, y + triH * 0.5);
+    gfx.lineTo(x - triW, y + triH * 0.5);
     gfx.closePath();
     gfx.strokePath();
 
-    // --- Carapace lines (diagonals + spine) ---
-    gfx.lineStyle(1, drawColor, 0.25);
-    // Spine
+    // Inner triangle outline
+    gfx.lineStyle(1, drawColor, 0.3);
+    const inset = 0.7;
     gfx.beginPath();
-    gfx.moveTo(x, y - r * 0.5);
-    gfx.lineTo(x, y + r * 1.0);
-    gfx.strokePath();
-    // Left diagonal
-    gfx.beginPath();
-    gfx.moveTo(x - r * 1.1, y - r * 0.5);
-    gfx.lineTo(x, y + r * 0.3);
-    gfx.strokePath();
-    // Right diagonal
-    gfx.beginPath();
-    gfx.moveTo(x + r * 1.1, y - r * 0.5);
-    gfx.lineTo(x, y + r * 0.3);
+    gfx.moveTo(x, y - triH * 0.5 * inset + 2);
+    gfx.lineTo(x + triW * inset, y + triH * 0.5 * inset);
+    gfx.lineTo(x - triW * inset, y + triH * 0.5 * inset);
+    gfx.closePath();
     gfx.strokePath();
 
-    // --- 3-layer tracking eye ---
-    let eyeOffX = 0;
-    let eyeOffY = 0;
-    if (player) {
-      const dx = player.x - x;
-      const dy = player.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      eyeOffX = (dx / dist) * 3;
-      eyeOffY = (dy / dist) * 3;
-    }
-    const eyeY = y - r * 0.1;
-    // Outer ring
-    const eyePulse = 0.6 + Math.sin(t * 5) * 0.2;
-    gfx.lineStyle(1, drawColor, 0.4);
-    gfx.strokeCircle(x + eyeOffX * 0.3, eyeY + eyeOffY * 0.3, 5);
-    // Red fill
-    gfx.fillStyle(0xff0000, 0.9 * eyePulse);
-    gfx.fillCircle(x + eyeOffX, eyeY + eyeOffY, 3);
-    // White pupil
-    gfx.fillStyle(0xffffff, 0.95);
-    gfx.fillCircle(x + eyeOffX, eyeY + eyeOffY, 1.2);
+    // --- Exclamation mark ( ! ) inside ---
+    const blink = Math.sin(t * 8) > -0.3 ? 0.9 : 0.2;
+    gfx.fillStyle(0xffffff, blink);
+    gfx.fillRect(x - 1, y - r * 0.6, 3, r * 0.7);  // bar
+    gfx.fillRect(x - 1, y + r * 0.3, 3, 3);          // dot
 
-    // --- 3 pairs of articulated legs with knee joints ---
-    const legPhase = t * 12;
-    gfx.lineStyle(1, drawColor, 0.55);
-    for (let pair = 0; pair < 3; pair++) {
-      const legBaseY = y + r * (-0.1 + pair * 0.35);
-      const swing = Math.sin(legPhase + pair * 2.1) * 4;
-      const kneeExtend = 4 + Math.abs(Math.sin(legPhase + pair * 2.1)) * 3;
-
-      // Left leg
-      const lKneeX = x - r * 0.9 - kneeExtend;
-      const lKneeY = legBaseY + swing * 0.5;
-      const lFootX = lKneeX - 2 + swing;
-      const lFootY = lKneeY + 5;
+    // --- Glitch offset lines (horizontal displacement) ---
+    const glitchActive = Math.sin(t * 7 + x * 0.1) > 0.7;
+    if (glitchActive) {
+      const offset = (Math.random() - 0.5) * 6;
+      gfx.lineStyle(2, drawColor, 0.6);
       gfx.beginPath();
-      gfx.moveTo(x - r * 0.6, legBaseY);
-      gfx.lineTo(lKneeX, lKneeY);
-      gfx.lineTo(lFootX, lFootY);
-      gfx.strokePath();
-
-      // Right leg
-      const rKneeX = x + r * 0.9 + kneeExtend;
-      const rKneeY = legBaseY - swing * 0.5;
-      const rFootX = rKneeX + 2 - swing;
-      const rFootY = rKneeY + 5;
-      gfx.beginPath();
-      gfx.moveTo(x + r * 0.6, legBaseY);
-      gfx.lineTo(rKneeX, rKneeY);
-      gfx.lineTo(rFootX, rFootY);
-      gfx.strokePath();
-    }
-
-    // --- Threat indicator chevron (below body) ---
-    if (player && player.alive && player.mode !== 'flight') {
-      const threatAlpha = 0.3 + Math.sin(t * 4) * 0.15;
-      gfx.lineStyle(1, 0xff0000, threatAlpha);
-      gfx.beginPath();
-      gfx.moveTo(x - 4, y + r * 1.0 + 4);
-      gfx.lineTo(x, y + r * 1.0 + 8);
-      gfx.lineTo(x + 4, y + r * 1.0 + 4);
+      gfx.moveTo(x - triW + offset, y + Math.random() * triH - triH * 0.3);
+      gfx.lineTo(x + triW + offset, y + Math.random() * triH - triH * 0.3);
       gfx.strokePath();
     }
   }
 
   // =============================================
-  //  GRAVITY FLARE — "Void Singularity"
+  //  GRAVITY FLARE — "Corrupted Node"
   // =============================================
   _drawFlare(gfx, flare) {
     const x = flare.x;
@@ -1026,96 +975,64 @@ export class EntityRenderer {
     const drawColor = flare.hitFlashTimer > 0 ? 0xffffff : CONFIG.FLARE_COLOR;
     const t = this._time;
 
-    // --- Dashed pull-radius rings (counter-rotating segments) ---
-    gfx.lineStyle(1, CONFIG.FLARE_COLOR, 0.08 * pulse);
-    this._drawDashedCircle(gfx, x, y, flare.pullRadius, 12, 0.35, t * 0.3);
-    gfx.lineStyle(1, CONFIG.FLARE_COLOR, 0.05 * pulse);
-    this._drawDashedCircle(gfx, x, y, flare.pullRadius * 0.75, 8, 0.4, -t * 0.5);
-
-    // --- 4 orbiting debris triangles ---
+    // --- Pull radius: rotating dashed squares ---
+    gfx.lineStyle(1, CONFIG.FLARE_COLOR, 0.1 * pulse);
+    const pr = flare.pullRadius;
     for (let i = 0; i < 4; i++) {
-      const orbitAngle = (HALF_PI * i) + t * 2;
-      const orbitR = r * 2.5 + Math.sin(t * 1.5 + i) * 4;
-      const dx = x + Math.cos(orbitAngle) * orbitR;
-      const dy = y + Math.sin(orbitAngle) * orbitR;
-      const selfRot = t * 6 + i * 1.5;
-      const debrisR = 3;
-      gfx.fillStyle(CONFIG.FLARE_COLOR, 0.4 * pulse);
-      this._drawPolygon(gfx, dx, dy, 3, debrisR, selfRot);
-      gfx.fillPath();
-      gfx.lineStyle(1, CONFIG.FLARE_COLOR, 0.6 * pulse);
-      this._drawPolygon(gfx, dx, dy, 3, debrisR, selfRot);
+      const a = t * 0.3 + HALF_PI * i;
+      const na = a + HALF_PI;
+      gfx.beginPath();
+      gfx.moveTo(x + Math.cos(a) * pr * 0.9, y + Math.sin(a) * pr * 0.9);
+      gfx.lineTo(x + Math.cos(na) * pr * 0.9, y + Math.sin(na) * pr * 0.9);
       gfx.strokePath();
     }
+    // Outer pull ring
+    gfx.lineStyle(1, CONFIG.FLARE_COLOR, 0.06 * pulse);
+    gfx.strokeCircle(x, y, pr);
 
-    // --- 6 curved spiral distortion lines ---
+    // --- Orbiting corrupted data fragments ---
     for (let i = 0; i < 6; i++) {
-      const baseAngle = (TWO_PI / 6) * i + t * 1.5;
-      gfx.lineStyle(1, CONFIG.FLARE_COLOR, 0.15 * pulse);
-      gfx.beginPath();
-      for (let step = 0; step < 10; step++) {
-        const tt = step / 10;
-        const spiralR = r * 0.4 + r * 2.0 * tt;
-        const spiralAngle = baseAngle + tt * Math.PI * 1.2;
-        const sx = x + Math.cos(spiralAngle) * spiralR;
-        const sy = y + Math.sin(spiralAngle) * spiralR;
-        if (step === 0) gfx.moveTo(sx, sy);
-        else gfx.lineTo(sx, sy);
-      }
+      const orbitAngle = (TWO_PI / 6) * i + t * 2.5;
+      const orbitR = r * 2.5 + Math.sin(t * 2 + i) * 5;
+      const fx = x + Math.cos(orbitAngle) * orbitR;
+      const fy = y + Math.sin(orbitAngle) * orbitR;
+      gfx.fillStyle(CONFIG.FLARE_COLOR, 0.5 * pulse);
+      gfx.fillRect(fx - 2, fy - 1, 4, 2);
+    }
+
+    // --- Concentric rotating squares (core) ---
+    for (let ring = 2; ring >= 0; ring--) {
+      const ringR = r * (0.6 + ring * 0.4);
+      const ringRot = t * (3 - ring) * (ring % 2 === 0 ? 1 : -1);
+      const ringAlpha = (0.3 + ring * 0.15) * pulse;
+      gfx.lineStyle(ring === 0 ? 2 : 1, drawColor, ringAlpha);
+      this._drawPolygon(gfx, x, y, 4, ringR, ringRot);
       gfx.strokePath();
     }
 
-    // --- 3 enhanced spiral arms with bright tips ---
-    for (let arm = 0; arm < 3; arm++) {
-      const baseAngle = (TWO_PI / 3) * arm + t * 3;
-      gfx.lineStyle(1, CONFIG.FLARE_COLOR, 0.35 * pulse);
-      gfx.beginPath();
-      let tipX = x, tipY = y;
-      for (let step = 0; step < 14; step++) {
-        const tt = step / 14;
-        const spiralR = r * 0.3 + r * 1.8 * tt;
-        const spiralAngle = baseAngle + tt * Math.PI * 1.5;
-        tipX = x + Math.cos(spiralAngle) * spiralR;
-        tipY = y + Math.sin(spiralAngle) * spiralR;
-        if (step === 0) gfx.moveTo(tipX, tipY);
-        else gfx.lineTo(tipX, tipY);
-      }
-      gfx.strokePath();
-      // Bright tip dot
-      gfx.fillStyle(0xffffff, 0.5 * pulse);
-      gfx.fillRect(tipX - 1, tipY - 1, 2, 2);
-    }
-
-    // --- Double-outline diamond shell ---
-    gfx.fillStyle(drawColor, 0.6 * pulse);
-    this._drawDiamond(gfx, x, y, r, r, 0);
+    // Inner filled square
+    gfx.fillStyle(drawColor, 0.4 * pulse);
+    this._drawPolygon(gfx, x, y, 4, r * 0.5, t * 3);
     gfx.fillPath();
-    gfx.lineStyle(2, drawColor, pulse);
-    this._drawDiamond(gfx, x, y, r, r, 0);
-    gfx.strokePath();
-    // Second outline (slightly larger)
-    gfx.lineStyle(1, drawColor, 0.4 * pulse);
-    this._drawDiamond(gfx, x, y, r * 1.25, r * 1.25, 0);
-    gfx.strokePath();
 
-    // --- Spinning cross core with center dot ---
-    const crossRot = t * 5;
-    const crossR = r * 0.5;
-    gfx.lineStyle(1, 0xffffff, 0.5 * pulse);
-    gfx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      const angle = crossRot + HALF_PI * i;
-      gfx.moveTo(x, y);
-      gfx.lineTo(x + Math.cos(angle) * crossR, y + Math.sin(angle) * crossR);
+    // --- Corruption glitch: random offset lines ---
+    if (Math.sin(t * 5) > 0.5) {
+      const glitchY = y + (Math.random() - 0.5) * r * 2;
+      gfx.lineStyle(2, drawColor, 0.5 * pulse);
+      gfx.beginPath();
+      gfx.moveTo(x - r * 1.5, glitchY);
+      gfx.lineTo(x + r * 1.5, glitchY);
+      gfx.strokePath();
     }
-    gfx.strokePath();
-    // Center dot
-    gfx.fillStyle(0xffffff, 0.6 * pulse);
-    gfx.fillCircle(x, y, 2);
+
+    // --- Center eye/dot ---
+    const eyePulse = 0.5 + Math.sin(t * 8) * 0.4;
+    gfx.fillStyle(0xffffff, eyePulse * pulse);
+    gfx.fillCircle(x, y, 2.5);
   }
 
   // =============================================
-  //  XP ORB — "Data Fragment"
+  //  XP ORB — "Data Bit"
   // =============================================
   _drawXPOrb(gfx, orb) {
     const x = orb.x;
@@ -1124,57 +1041,47 @@ export class EntityRenderer {
     const pulse = Math.sin(orb.elapsed / 200) * 0.3 + 0.7;
     const t = this._time;
     const magnetized = orb.magnetized || false;
-    const sparkSpeed = magnetized ? 8 : 4;
 
-    // --- 6 orbiting sparkle dots with per-dot flicker ---
-    for (let i = 0; i < 6; i++) {
-      const sparkAngle = (TWO_PI / 6) * i + t * sparkSpeed;
-      const sparkR = r * 2.2;
-      const sx = x + Math.cos(sparkAngle) * sparkR;
-      const sy = y + Math.sin(sparkAngle) * sparkR;
-      const flicker = 0.3 + Math.sin(t * 10 + i * 1.7) * 0.25;
-      gfx.fillStyle(CONFIG.XP_ORB_COLOR, flicker * pulse);
-      gfx.fillRect(sx - 1, sy - 1, 2, 2);
+    // --- Rotating outer bracket ring ---
+    const bracketR = r * 2.0;
+    const bracketRot = t * (magnetized ? 6 : 2);
+    gfx.lineStyle(1, CONFIG.XP_ORB_COLOR, 0.4 * pulse);
+    for (let i = 0; i < 4; i++) {
+      const a = bracketRot + HALF_PI * i;
+      const bx = x + Math.cos(a) * bracketR;
+      const by = y + Math.sin(a) * bracketR;
+      gfx.beginPath();
+      gfx.moveTo(bx - 2, by - 2);
+      gfx.lineTo(bx + 2, by - 2);
+      gfx.lineTo(bx + 2, by + 2);
+      gfx.strokePath();
     }
 
-    // --- Outer hexagon ---
-    gfx.lineStyle(1, CONFIG.XP_ORB_COLOR, 0.5 * pulse);
-    this._drawPolygon(gfx, x, y, 6, r * 1.3, t * 1.5);
-    gfx.strokePath();
+    // --- Main body: bright filled square ---
+    gfx.fillStyle(CONFIG.XP_ORB_COLOR, 0.6 * pulse);
+    gfx.fillRect(x - r, y - r, r * 2, r * 2);
+    gfx.lineStyle(1, CONFIG.XP_ORB_COLOR, 0.9 * pulse);
+    gfx.strokeRect(x - r, y - r, r * 2, r * 2);
 
-    // --- Counter-rotating outer hex ---
-    gfx.lineStyle(1, CONFIG.XP_ORB_COLOR, 0.3 * pulse);
-    this._drawPolygon(gfx, x, y, 6, r * 1.5, -t * 1.5);
-    gfx.strokePath();
+    // --- Pixel cluster: 4 satellite dots ---
+    const dotOff = r * 1.4;
+    gfx.fillStyle(CONFIG.XP_ORB_COLOR, 0.5 * pulse);
+    gfx.fillRect(x - dotOff - 1, y - 1, 2, 2);
+    gfx.fillRect(x + dotOff - 1, y - 1, 2, 2);
+    gfx.fillRect(x - 1, y - dotOff - 1, 2, 2);
+    gfx.fillRect(x - 1, y + dotOff - 1, 2, 2);
 
-    // --- Hexagonal crystal body (fill) ---
-    gfx.fillStyle(CONFIG.XP_ORB_COLOR, 0.55 * pulse);
-    this._drawPolygon(gfx, x, y, 6, r, -Math.PI / 6);
-    gfx.fillPath();
-    gfx.lineStyle(1, CONFIG.XP_ORB_COLOR, 0.8 * pulse);
-    this._drawPolygon(gfx, x, y, 6, r, -Math.PI / 6);
-    gfx.strokePath();
+    // --- White center pixel ---
+    const blink = Math.sin(t * 10) > 0 ? 0.9 : 0.4;
+    gfx.fillStyle(0xffffff, blink * pulse);
+    gfx.fillRect(x - 1, y - 1, 3, 3);
 
-    // --- Inner 6-pointed star (two overlaid rotating triangles) ---
-    const starR = r * 0.7;
-    gfx.fillStyle(0xffffff, 0.3 * pulse);
-    this._drawPolygon(gfx, x, y, 3, starR, t * 3);
-    gfx.fillPath();
-    this._drawPolygon(gfx, x, y, 3, starR, t * 3 + Math.PI);
-    gfx.fillPath();
-
-    // --- White diamond core ---
-    const coreR = r * 0.3;
-    gfx.fillStyle(0xffffff, 0.7 * pulse);
-    this._drawDiamond(gfx, x, y, coreR, coreR * 0.7, -t * 5);
-    gfx.fillPath();
-
-    // --- When magnetized: 3 directional streaks toward player ---
+    // --- When magnetized: streaks toward player ---
     if (magnetized) {
-      gfx.lineStyle(1, CONFIG.XP_ORB_COLOR, 0.4);
+      gfx.lineStyle(1, CONFIG.XP_ORB_COLOR, 0.5);
       for (let i = 0; i < 3; i++) {
-        const streakAngle = -HALF_PI + (i - 1) * 0.3;
-        const len = r * 2 + Math.random() * r;
+        const streakAngle = -HALF_PI + (i - 1) * 0.25;
+        const len = r * 2.5 + Math.random() * r;
         gfx.beginPath();
         gfx.moveTo(x, y);
         gfx.lineTo(x + Math.cos(streakAngle) * len, y + Math.sin(streakAngle) * len);
@@ -1184,7 +1091,7 @@ export class EntityRenderer {
   }
 
   // =============================================
-  //  SHIELD DRONE — "Sentinel Orb"
+  //  SHIELD DRONE — "Proxy Sentry"
   // =============================================
   _drawShieldDrone(gfx, drone) {
     const x = drone.x;
@@ -1193,81 +1100,41 @@ export class EntityRenderer {
     const drawColor = drone.hitFlashTimer > 0 ? 0xffffff : CONFIG.SHIELD_DRONE_COLOR;
     const t = this._time;
 
-    // --- Animated energy tether to host ---
+    // --- Tether line to host ---
     if (drone.host && drone.host.alive) {
       const hx = drone.host.x;
       const hy = drone.host.y;
-      // Dashed line
       const dx = hx - x;
       const dy = hy - y;
+      // Dashed tether
+      gfx.lineStyle(1, CONFIG.SHIELD_DRONE_COLOR, 0.2);
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const segments = Math.floor(dist / 8);
-      gfx.lineStyle(1, CONFIG.SHIELD_DRONE_COLOR, 0.25);
-      for (let i = 0; i < segments; i += 2) {
-        const t1 = i / segments;
-        const t2 = Math.min((i + 1) / segments, 1);
+      const segs = Math.floor(dist / 8);
+      for (let i = 0; i < segs; i += 2) {
+        const t1 = i / segs;
+        const t2 = Math.min((i + 1) / segs, 1);
         gfx.beginPath();
         gfx.moveTo(x + dx * t1, y + dy * t1);
         gfx.lineTo(x + dx * t2, y + dy * t2);
         gfx.strokePath();
       }
-      // Traveling dots
-      const dotCount = 3;
-      for (let i = 0; i < dotCount; i++) {
-        const dotT = ((t * 3 + i / dotCount) % 1);
-        const dotX = x + dx * dotT;
-        const dotY = y + dy * dotT;
-        gfx.fillStyle(CONFIG.SHIELD_DRONE_COLOR, 0.5);
-        gfx.fillRect(dotX - 1, dotY - 1, 2, 2);
-      }
     }
 
-    // --- Outer dashed ring ---
-    gfx.lineStyle(1, drawColor, 0.35);
-    this._drawDashedCircle(gfx, x, y, r * 2.0, 8, 0.3, t * 0.8);
-
-    // --- Solid circle ring ---
-    gfx.lineStyle(1.5, drawColor, 0.7);
-    gfx.strokeCircle(x, y, r * 1.4);
-
-    // --- Rotating diamond body ---
-    const diamondRot = t * 2;
-    gfx.fillStyle(drawColor, 0.75);
-    this._drawDiamond(gfx, x, y, r, r * 0.7, diamondRot);
-    gfx.fillPath();
-    gfx.lineStyle(1, drawColor, 1);
-    this._drawDiamond(gfx, x, y, r, r * 0.7, diamondRot);
+    // --- Rotating square frame ---
+    const rot = t * 1.5;
+    gfx.lineStyle(1, drawColor, 0.5);
+    this._drawPolygon(gfx, x, y, 4, r * 1.6, rot);
     gfx.strokePath();
 
-    // --- Crosshair core ---
-    const crossRot = t * 0.8;
-    const crossLen = r * 0.5;
-    gfx.lineStyle(1, 0xffffff, 0.5);
-    gfx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      const angle = crossRot + HALF_PI * i;
-      gfx.moveTo(x + Math.cos(angle) * 1.5, y + Math.sin(angle) * 1.5);
-      gfx.lineTo(x + Math.cos(angle) * crossLen, y + Math.sin(angle) * crossLen);
-    }
-    gfx.strokePath();
-    // Center dot
-    gfx.fillStyle(0xffffff, 0.8);
-    gfx.fillCircle(x, y, 1.5);
+    // --- Filled inner square ---
+    gfx.fillStyle(drawColor, 0.5);
+    gfx.fillRect(x - r, y - r, r * 2, r * 2);
+    gfx.lineStyle(1, drawColor, 0.8);
+    gfx.strokeRect(x - r, y - r, r * 2, r * 2);
 
-    // --- Orbit trail arc (when orbiting host) ---
-    if (drone.host && drone.host.alive && !drone.freeRoaming) {
-      const trailArc = 0.8; // radians of trail
-      gfx.lineStyle(1, CONFIG.SHIELD_DRONE_COLOR, 0.15);
-      gfx.beginPath();
-      for (let a = 0; a <= 8; a++) {
-        const trailAngle = drone.orbitAngle - trailArc * (a / 8);
-        const tx = drone.host.x + Math.cos(trailAngle) * drone.orbitRadius;
-        const ty = drone.host.y + Math.sin(trailAngle) * drone.orbitRadius;
-        if (a === 0) gfx.moveTo(tx, ty);
-        else gfx.lineTo(tx, ty);
-      }
-      gfx.strokePath();
-    }
+    // --- Center dot ---
+    gfx.fillStyle(0xffffff, 0.7);
+    gfx.fillRect(x - 1, y - 1, 2, 2);
   }
 
   // =============================================
@@ -1365,30 +1232,27 @@ export class EntityRenderer {
     const drawColor = anchor.hitFlashTimer > 0 ? 0xffffff : CONFIG.LASER_COLOR;
     const t = this._time;
 
-    // --- Octagonal body ---
-    gfx.fillStyle(drawColor, 0.65);
-    this._drawPolygon(gfx, x, y, 8, r, Math.PI / 8);
-    gfx.fillPath();
-    gfx.lineStyle(2, drawColor, 1);
-    this._drawPolygon(gfx, x, y, 8, r, Math.PI / 8);
-    gfx.strokePath();
+    // --- Square body ---
+    gfx.fillStyle(drawColor, 0.5);
+    gfx.fillRect(x - r, y - r, r * 2, r * 2);
+    gfx.lineStyle(2, drawColor, 0.9);
+    gfx.strokeRect(x - r, y - r, r * 2, r * 2);
 
-    // --- Inner rotating inscribed square ---
+    // --- Inner rotating square ---
     gfx.lineStyle(1, drawColor, 0.4);
     this._drawPolygon(gfx, x, y, 4, r * 0.6, t * 1.5);
     gfx.strokePath();
 
-    // --- Diamond HP pips ---
+    // --- HP pips as small squares ---
     const pipSpacing = 6;
     const pipStartX = x - ((anchor.hp - 1) * pipSpacing) / 2;
     for (let i = 0; i < anchor.hp; i++) {
       const px = pipStartX + i * pipSpacing;
       gfx.fillStyle(0xffffff, 0.85);
-      this._drawDiamond(gfx, px, y, 2.5, 2, 0);
-      gfx.fillPath();
+      gfx.fillRect(px - 2, y - 1, 4, 2);
     }
 
-    // --- Beam emitter dot on inner face toward partner ---
+    // --- Beam emitter dot toward partner ---
     if (otherAnchor && otherAnchor.alive) {
       const dx = otherAnchor.x - x;
       const dy = otherAnchor.y - y;
@@ -1397,12 +1261,12 @@ export class EntityRenderer {
       const emitY = y + (dy / dist) * r;
       const emitPulse = 0.5 + Math.sin(t * 6) * 0.3;
       gfx.fillStyle(CONFIG.LASER_BEAM_COLOR, emitPulse);
-      gfx.fillCircle(emitX, emitY, 2);
+      gfx.fillRect(emitX - 2, emitY - 2, 4, 4);
     }
   }
 
   // =============================================
-  //  POWER-UP — "Prism Artifact"
+  //  POWER-UP — "System Patch"
   // =============================================
   _drawPowerUp(gfx, pu) {
     const x = pu.x;
@@ -1416,84 +1280,54 @@ export class EntityRenderer {
     const expiring = remaining < 2000;
     if (expiring && Math.floor(remaining / 120) % 2 === 0) return;
 
-    // --- Breathing beacon pulse ring ---
-    const beaconPulse = expiring
-      ? (0.3 + Math.sin(t * 12) * 0.3)  // rapid flash when expiring
-      : (0.15 + Math.sin(t * 2) * 0.1);
-    const beaconR = r * 2.5 + Math.sin(t * 2) * r * 0.5;
-    gfx.lineStyle(1, color, beaconPulse);
-    gfx.strokeCircle(x, y, beaconR);
+    // --- Pulsing outer square ---
+    const pulseR = r * 2.2 + Math.sin(t * 3) * r * 0.4;
+    const pulseAlpha = expiring ? (0.3 + Math.sin(t * 12) * 0.3) : 0.25;
+    gfx.lineStyle(1, color, pulseAlpha);
+    gfx.strokeRect(x - pulseR, y - pulseR, pulseR * 2, pulseR * 2);
 
-    // --- 8 orbiting sparkle dots ---
-    const sparkDir = expiring ? -1 : 1;  // reverse when expiring
-    for (let i = 0; i < 8; i++) {
-      const sparkAngle = (TWO_PI / 8) * i + t * 3 * sparkDir;
-      const sparkR = r * 2.0;
-      const sx = x + Math.cos(sparkAngle) * sparkR;
-      const sy = y + Math.sin(sparkAngle) * sparkR;
-      const sparkAlpha = 0.3 + Math.sin(t * 8 + i * 0.9) * 0.2;
-      gfx.fillStyle(color, sparkAlpha);
-      gfx.fillRect(sx - 1, sy - 1, 2, 2);
-    }
+    // --- Corner dots ---
+    gfx.fillStyle(color, 0.5);
+    const cd = r * 1.6;
+    gfx.fillRect(x - cd - 1, y - cd - 1, 2, 2);
+    gfx.fillRect(x + cd - 1, y - cd - 1, 2, 2);
+    gfx.fillRect(x - cd - 1, y + cd - 1, 2, 2);
+    gfx.fillRect(x + cd - 1, y + cd - 1, 2, 2);
 
-    // --- Octagram wireframe (8-pointed star from two overlaid rotating squares) ---
-    const octaR = r * 1.3;
-    gfx.lineStyle(1, color, 0.5);
-    this._drawPolygon(gfx, x, y, 4, octaR, t * 1.2);
-    gfx.strokePath();
-    this._drawPolygon(gfx, x, y, 4, octaR, t * 1.2 + Math.PI / 4);
-    gfx.strokePath();
+    // --- Main square body ---
+    gfx.fillStyle(color, 0.5);
+    gfx.fillRect(x - r, y - r, r * 2, r * 2);
+    gfx.lineStyle(2, color, 0.9);
+    gfx.strokeRect(x - r, y - r, r * 2, r * 2);
 
-    // --- Hexagon body fill ---
-    gfx.fillStyle(color, 0.65);
-    this._drawPolygon(gfx, x, y, 6, r, -Math.PI / 6);
-    gfx.fillPath();
-    gfx.lineStyle(1, color, 0.9);
-    this._drawPolygon(gfx, x, y, 6, r, -Math.PI / 6);
-    gfx.strokePath();
-
-    // --- Type-specific icon ---
+    // --- Type-specific icon (white, simple) ---
     gfx.lineStyle(1.5, 0xffffff, 0.8);
-    const iconR = r * 0.4;
+    const ir = r * 0.4;
     switch (pu.powerType) {
       case 'FLIGHT_RECHARGE':
-        // Upward arrow
         gfx.beginPath();
-        gfx.moveTo(x, y - iconR);
-        gfx.lineTo(x, y + iconR);
-        gfx.moveTo(x - iconR * 0.6, y - iconR * 0.3);
-        gfx.lineTo(x, y - iconR);
-        gfx.lineTo(x + iconR * 0.6, y - iconR * 0.3);
+        gfx.moveTo(x, y - ir); gfx.lineTo(x, y + ir);
+        gfx.moveTo(x - ir * 0.6, y - ir * 0.3);
+        gfx.lineTo(x, y - ir); gfx.lineTo(x + ir * 0.6, y - ir * 0.3);
         gfx.strokePath();
         break;
       case 'SCORE_BOOST':
-        // Circle (coin)
-        gfx.strokeCircle(x, y, iconR);
+        gfx.strokeRect(x - ir, y - ir, ir * 2, ir * 2);
         break;
       case 'SHIELD':
-        // Cross / plus
         gfx.beginPath();
-        gfx.moveTo(x - iconR, y);
-        gfx.lineTo(x + iconR, y);
-        gfx.moveTo(x, y - iconR);
-        gfx.lineTo(x, y + iconR);
+        gfx.moveTo(x - ir, y); gfx.lineTo(x + ir, y);
+        gfx.moveTo(x, y - ir); gfx.lineTo(x, y + ir);
         gfx.strokePath();
         break;
       case 'SLAM_PLUS':
-        // Down arrow + explosion lines
         gfx.beginPath();
-        gfx.moveTo(x, y + iconR);
-        gfx.lineTo(x, y - iconR);
-        gfx.moveTo(x - iconR * 0.6, y + iconR * 0.3);
-        gfx.lineTo(x, y + iconR);
-        gfx.lineTo(x + iconR * 0.6, y + iconR * 0.3);
+        gfx.moveTo(x, y + ir); gfx.lineTo(x, y - ir);
+        gfx.moveTo(x - ir * 0.6, y + ir * 0.3);
+        gfx.lineTo(x, y + ir); gfx.lineTo(x + ir * 0.6, y + ir * 0.3);
         gfx.strokePath();
         break;
     }
-
-    // --- White core ---
-    gfx.fillStyle(0xffffff, 0.9);
-    gfx.fillCircle(x, y, 2);
   }
 
   destroy() {

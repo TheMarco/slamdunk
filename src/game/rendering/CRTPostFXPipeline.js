@@ -38,7 +38,7 @@ export class CRTPostFXPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPip
     });
 
     this._time = 0;
-    this._scanlineIntensity = 0.08;
+    this._scanlineIntensity = 0.10;
     this._chromaOffset = 0.0008;
     this._chromaTarget = 0.0008;
     this._chromaDecayTimer = 0;

@@ -15,14 +15,14 @@ export class TitleScene extends Phaser.Scene {
     this.add.text(cx, cy - 80, 'VECTOR DRIFT', {
       fontFamily: 'Courier New',
       fontSize: '36px',
-      color: '#00ffff',
+      color: '#33aa77',
       align: 'center',
     }).setOrigin(0.5);
 
     this.add.text(cx, cy - 40, 'Hold to Fly — Release to Slam', {
       fontFamily: 'Courier New',
       fontSize: '14px',
-      color: '#555555',
+      color: '#336644',
       align: 'center',
     }).setOrigin(0.5);
 
@@ -32,7 +32,7 @@ export class TitleScene extends Phaser.Scene {
       this.add.text(cx, cy + 10, `HIGH SCORE: ${hi}`, {
         fontFamily: 'Courier New',
         fontSize: '16px',
-        color: '#ffdd44',
+        color: '#ccaa33',
         align: 'center',
       }).setOrigin(0.5);
     }
@@ -41,7 +41,7 @@ export class TitleScene extends Phaser.Scene {
     this.prompt = this.add.text(cx, cy + 60, 'PRESS SPACE / TAP TO START', {
       fontFamily: 'Courier New',
       fontSize: '16px',
-      color: '#00ffff',
+      color: '#33aa77',
       align: 'center',
     }).setOrigin(0.5);
 
@@ -52,7 +52,7 @@ export class TitleScene extends Phaser.Scene {
     this.add.text(cx, cy + 120, 'HOLD SPACE = FLY | RELEASE = SLAM | ARROWS = MOVE', {
       fontFamily: 'Courier New',
       fontSize: '11px',
-      color: '#444444',
+      color: '#223322',
       align: 'center',
     }).setOrigin(0.5);
 

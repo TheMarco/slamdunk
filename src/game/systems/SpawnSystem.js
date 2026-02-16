@@ -74,15 +74,15 @@ export class SpawnSystem {
 
   _getUnlocked(elapsed) {
     const types = ['blocker'];
-    if (elapsed >= 15) types.push('chaser');
-    if (elapsed >= 30) types.push('flare');
-    if (elapsed >= 45) types.push('laserGate');
+    if (elapsed >= 40) types.push('chaser');
+    if (elapsed >= 85) types.push('flare');
+    if (elapsed >= 140) types.push('laserGate');
     return types;
   }
 
   _pickType(unlocked, counts) {
     const WEIGHTS = { blocker: 50, chaser: 30, flare: 20, laserGate: 15 };
-    const CAPS = { blocker: 8, chaser: 6, flare: 4, laserGate: 3 };
+    const CAPS = { blocker: 6, chaser: 5, flare: 3, laserGate: 2 };
     const COUNT_KEYS = { blocker: 'blockers', chaser: 'chasers', flare: 'flares', laserGate: 'laserGates' };
 
     // Filter by density cap

@@ -15,14 +15,14 @@ export class SplashScene extends Phaser.Scene {
     this.add.text(cx, cy - 20, 'VECTOR DRIFT', {
       fontFamily: 'Courier New',
       fontSize: '28px',
-      color: '#00ffff',
+      color: '#33aa77',
       align: 'center',
     }).setOrigin(0.5);
 
     this.add.text(cx, cy + 20, 'Kinetic Survival', {
       fontFamily: 'Courier New',
       fontSize: '14px',
-      color: '#555555',
+      color: '#336644',
       align: 'center',
     }).setOrigin(0.5);
 

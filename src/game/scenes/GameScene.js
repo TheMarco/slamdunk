@@ -12,7 +12,7 @@ import { HUD } from '../hud/HUD.js';
 import { XPOrb } from '../entities/XPOrb.js';
 import { PowerUp } from '../entities/PowerUp.js';
 import { CONFIG } from '../config.js';
-import { getDifficulty } from '../config/difficulty.js';
+import { getDifficulty, getZoneByTime } from '../config/difficulty.js';
 import { checkHighScore, setHighScore } from '../utils/highScore.js';
 import { getPerformanceProfile } from '../utils/deviceDetection.js';
 import { CRTPostFXPipeline } from '../rendering/CRTPostFXPipeline.js';
@@ -191,22 +191,19 @@ export class GameScene extends Phaser.Scene {
       // Combo milestone popups + Phase 7 juice
       const combo = this.gameState.comboCount;
       if (combo === 3 && this.hud.spawnPopup) {
-        this.hud.spawnPopup(this.player.x, this.player.y - 40, 'COMBO x2!', '#ffdd44', 18);
+        this.hud.spawnPopup(this.player.x, this.player.y - 40, 'COMBO x2!', '#ccaa33', 18);
       } else if (combo === 5 && this.hud.spawnPopup) {
-        this.hud.spawnPopup(this.player.x, this.player.y - 40, 'COMBO x3!', '#ff6600', 20);
-        // Phase 7: hit-freeze at combo 5
+        this.hud.spawnPopup(this.player.x, this.player.y - 40, 'COMBO x3!', '#cc6600', 20);
         this._hitFreeze(50);
-        this.effects.screenFlash(0xffaa00, 0.08);
+        this.effects.screenFlash(0xcc8800, 0.08);
       } else if (combo === 10 && this.hud.spawnPopup) {
-        this.hud.spawnPopup(this.player.x, this.player.y - 40, 'COMBO x5!', '#ff00ff', 24);
-        // Phase 7: hit-freeze at combo 10
+        this.hud.spawnPopup(this.player.x, this.player.y - 40, 'COMBO x5!', '#cc4400', 24);
         this._hitFreeze(50);
-        this.effects.screenFlash(0xff00ff, 0.1);
+        this.effects.screenFlash(0xcc4400, 0.1);
       } else if (combo === 20 && this.hud.spawnPopup) {
-        this.hud.spawnPopup(this.player.x, this.player.y - 40, 'INSANE!', '#ff0000', 28);
-        // Phase 7: hit-freeze at combo 20
+        this.hud.spawnPopup(this.player.x, this.player.y - 40, 'INSANE!', '#cc2222', 28);
         this._hitFreeze(50);
-        this.effects.screenFlash(0xff4400, 0.12);
+        this.effects.screenFlash(0xcc4400, 0.12);
       }
     };
 
@@ -260,19 +257,19 @@ export class GameScene extends Phaser.Scene {
       switch (pu.powerType) {
         case 'FLIGHT_RECHARGE':
           this.player.flightMeter = CONFIG.FLIGHT_METER_MAX;
-          if (this.hud.spawnPopup) this.hud.spawnPopup(pu.x, pu.y - 20, 'FLIGHT RECHARGED!', '#00ffff', 16);
+          if (this.hud.spawnPopup) this.hud.spawnPopup(pu.x, pu.y - 20, 'FLIGHT RECHARGED!', '#00cc99', 16);
           break;
         case 'SCORE_BOOST':
           this.gameState.scoreBoostTimer = CONFIG.SCORE_BOOST_DURATION_MS;
-          if (this.hud.spawnPopup) this.hud.spawnPopup(pu.x, pu.y - 20, 'SCORE x2!', '#ffdd44', 16);
+          if (this.hud.spawnPopup) this.hud.spawnPopup(pu.x, pu.y - 20, 'SCORE x2!', '#ccaa33', 16);
           break;
         case 'SHIELD':
           this.player.shieldActive = true;
-          if (this.hud.spawnPopup) this.hud.spawnPopup(pu.x, pu.y - 20, 'SHIELD!', '#00ff88', 16);
+          if (this.hud.spawnPopup) this.hud.spawnPopup(pu.x, pu.y - 20, 'SHIELD!', '#33aa66', 16);
           break;
         case 'SLAM_PLUS':
           this.player.slamPlusActive = true;
-          if (this.hud.spawnPopup) this.hud.spawnPopup(pu.x, pu.y - 20, 'MEGA SLAM!', '#ff00ff', 16);
+          if (this.hud.spawnPopup) this.hud.spawnPopup(pu.x, pu.y - 20, 'MEGA SLAM!', '#cc4400', 16);
           break;
       }
       this.effects.spawnExplosion(pu.x, pu.y, pu.getColor(), 8);
@@ -351,6 +348,26 @@ export class GameScene extends Phaser.Scene {
     this.gameState.health = this.player.health;
     this.gameState.flightMeter = this.player.flightMeter;
     this.gameState.playerMode = this.player.mode;
+
+    // Pass zone grid tint to gameState for renderer
+    const zone = getZoneByTime(this.gameState.elapsed);
+    this.gameState._zoneTint = zone.gridTint;
+
+    // Zone transition announcements
+    if (this.gameState.zoneJustChanged) {
+      this.hud.announceZone(zone.name, zone.isPlateau);
+      if (!zone.isPlateau) {
+        this.effects.screenFlash(zone.gridTint, 0.15);
+      }
+      // Extra effects for later zones
+      const lateZones = ['MAINFRAME', 'KERNEL', 'ROOT'];
+      if (lateZones.includes(zone.name)) {
+        this.effects.screenShake(3, 300);
+      }
+      if (zone.name === 'ROOT') {
+        this._chromaSpike(0.005, 400);
+      }
+    }
 
     // 9. Effects
     this.effects.update(delta);

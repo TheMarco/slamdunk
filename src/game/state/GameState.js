@@ -1,4 +1,5 @@
 import { CONFIG } from '../config.js';
+import { getZoneByTime } from '../config/difficulty.js';
 
 export class GameState {
   constructor() {
@@ -27,12 +28,24 @@ export class GameState {
     // Power-up timers
     this.scoreBoostTimer = 0;
 
-    // Phase tracking
-    this.phaseReached = 'WARMUP';
+    // Phase/zone tracking
+    this.phaseReached = 'FIREWALL';
+    this.currentZone = 'FIREWALL';
+    this.previousZone = null;
+    this.zoneJustChanged = false;
   }
 
   update(dt) {
     this.elapsed += dt;
+    this.zoneJustChanged = false;
+
+    // Zone transition detection
+    const zone = getZoneByTime(this.elapsed);
+    if (zone.name !== this.currentZone) {
+      this.previousZone = this.currentZone;
+      this.currentZone = zone.name;
+      this.zoneJustChanged = true;
+    }
     // Decay multiplier
     if (this.multiplierTimer > 0) {
       this.multiplierTimer -= dt * 1000;
